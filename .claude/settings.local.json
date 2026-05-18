@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx react-router *)",
+      "Bash(npm --version)",
+      "Bash(grep -E \"^\\(zustand|vitest|vite\\)$\")",
+      "Bash(npm info *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('peerDependencies',''\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('peerDependenciesMeta',''\\), indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('exports',''\\), indent=2\\)\\)\")",
+      "Bash(git -C /Users/rajath.shanbhag/Workspace/Tutorial/aidd/quordle-hurdle log --oneline -5)",
+      "Bash(git -C /Users/rajath.shanbhag/Workspace/Tutorial/aidd/quordle-hurdle status)",
+      "Bash(npm install *)"
+    ]
+  }
+}

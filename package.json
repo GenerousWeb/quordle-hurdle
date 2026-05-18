@@ -6,7 +6,10 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc"
+    "typecheck": "react-router typegen && tsc",
+    "typecheck:all": "npm run typecheck && tsc -p server/tsconfig.json --noEmit && tsc -p client/tsconfig.json --noEmit",
+    "lint": "eslint app/ server/src/ client/src/ shared/",
+    "test": "npm test --prefix server && npm test --prefix client"
   },
   "dependencies": {
     "@react-router/node": "7.15.0",
@@ -17,13 +20,19 @@
     "react-router": "7.15.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@react-router/dev": "7.15.0",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^22",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.3",
     "vite": "^8.0.3"
   }
 }

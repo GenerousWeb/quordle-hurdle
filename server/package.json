@@ -1,0 +1,17 @@
+{
+  "name": "quordle-hurdle-server",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "../node_modules/.bin/eslint src/"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.9.3",
+    "vite-tsconfig-paths": "^5.0.0",
+    "vitest": "^3.2.0"
+  }
+}
