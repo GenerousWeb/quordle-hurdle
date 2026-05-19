@@ -4,14 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "../node_modules/.bin/eslint src/"
   },
   "devDependencies": {
     "@types/node": "^22",
+    "tsx": "^4.22.3",
     "typescript": "^5.9.3",
     "vite-tsconfig-paths": "^5.0.0",
     "vitest": "^3.2.0"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.3"
   }
 }

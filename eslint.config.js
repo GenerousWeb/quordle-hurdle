@@ -20,6 +20,16 @@ export default tseslint.config(
   // TypeScript rules for all .ts/.tsx files
   ...tseslint.configs.recommended,
 
+  // Allow _-prefixed args/vars to be declared but unused (common TS convention)
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
+
   // Node.js globals for server and shared (no DOM, no browser)
   {
     files: ["server/**/*.ts", "shared/**/*.ts"],

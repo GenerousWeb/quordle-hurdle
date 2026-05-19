@@ -1,26 +1,27 @@
 /**
  * @vitest-environment happy-dom
  *
- * Step 2 — Board grid UI, keyboard input, and focus rules (tests #70–95).
+ * Step 2 — Board grid UI, shared keyboard input (tests #60–81).
  *
- * These tests drive the implementation of <BoardGrid /> in BoardGrid.tsx.
+ * All four boards receive the same typed input simultaneously. There is no focus
+ * model — every unsolved board displays the shared currentInput identically.
+ *
  * Expected DOM conventions:
- *   - Each board container: data-board-index="{0–3}" data-status="{status}"
+ *   - Each board container: data-board-index="{0–3}" data-status="{unsolved|solved|failed|locked}"
  *   - Each row inside a board: data-row-index="{0–8}"
- *   - Each tile inside a row: data-tile-index="{0–4}" data-result="{green|yellow|grey}"
- *     (data-result is absent on tiles that have not yet been submitted)
- *   - The target-word reveal row on a failed board contains the target word as text content
+ *   - Each tile inside a row: data-tile-index="{0–4}" (data-result absent until submitted)
+ *   - Failed board: target word text visible below the tile grid
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { BoardGrid } from "./BoardGrid";
 import { boardStore } from "../store/boardStore";
-import type { TileResult } from "shared/types/game";
 
 const WORDS = ["apple", "grape", "stone", "light"];
 
 function resetAndInit() {
-  boardStore.setState({ boards: [] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (boardStore.setState as (s: any) => void)({ boards: [], currentInput: "", submitting: false });
   boardStore.getState().initBoards(WORDS);
 }
 
@@ -37,9 +38,7 @@ function getBoards(): NodeListOf<Element> {
 }
 
 function getRows(boardIndex: number): NodeListOf<Element> {
-  return document.querySelectorAll(
-    `[data-board-index="${boardIndex}"] [data-row-index]`,
-  );
+  return document.querySelectorAll(`[data-board-index="${boardIndex}"] [data-row-index]`);
 }
 
 function getTiles(boardIndex: number, rowIndex: number): NodeListOf<Element> {
@@ -48,11 +47,7 @@ function getTiles(boardIndex: number, rowIndex: number): NodeListOf<Element> {
   );
 }
 
-function getTile(
-  boardIndex: number,
-  rowIndex: number,
-  tileIndex: number,
-): HTMLElement {
+function getTile(boardIndex: number, rowIndex: number, tileIndex: number): HTMLElement {
   return document.querySelector(
     `[data-board-index="${boardIndex}"] [data-row-index="${rowIndex}"] [data-tile-index="${tileIndex}"]`,
   ) as HTMLElement;
@@ -63,55 +58,47 @@ function pressKey(key: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Rendering
+// Rendering (tests #60–66)
 // ---------------------------------------------------------------------------
 
 describe("BoardGrid — rendering", () => {
-  it("70: renders exactly 4 board containers", () => {
+  it("60: renders 4 boards", () => {
     render(<BoardGrid />);
     expect(getBoards()).toHaveLength(4);
   });
 
-  it("71: each board renders 9 rows", () => {
+  it("61: renders 9 rows per board", () => {
     render(<BoardGrid />);
     expect(getRows(0)).toHaveLength(9);
   });
 
-  it("72: each row renders 5 tiles", () => {
+  it("62: renders 5 tiles per row", () => {
     render(<BoardGrid />);
     expect(getTiles(0, 0)).toHaveLength(5);
   });
 
-  it("73: board 0 starts with data-status='active'", () => {
+  it("63: all boards show unsolved state on init", () => {
     render(<BoardGrid />);
-    expect(getBoard(0)).toHaveAttribute("data-status", "active");
+    for (let i = 0; i < 4; i++) {
+      expect(getBoard(i)).toHaveAttribute("data-status", "unsolved");
+    }
   });
 
-  it("74: boards 1–3 start with data-status='idle'", () => {
-    render(<BoardGrid />);
-    expect(getBoard(1)).toHaveAttribute("data-status", "idle");
-    expect(getBoard(2)).toHaveAttribute("data-status", "idle");
-    expect(getBoard(3)).toHaveAttribute("data-status", "idle");
-  });
-
-  it("75: board in solved state has data-status='solved'", () => {
+  it("64: solved board has data-status='solved'", () => {
     act(() => {
-      boardStore.setState({
-        boards: boardStore
-          .getState()
-          .boards.map((b, i) => (i === 0 ? { ...b, status: "solved" } : b)),
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
     });
     render(<BoardGrid />);
     expect(getBoard(0)).toHaveAttribute("data-status", "solved");
   });
 
-  it("76: failed board shows its target word in the reveal row", () => {
+  it("65: failed board shows target word below the grid", () => {
     act(() => {
       boardStore.setState({
-        boards: boardStore
-          .getState()
-          .boards.map((b, i) => (i === 0 ? { ...b, status: "failed" } : b)),
+        boards: boardStore.getState().boards.map((b, i) =>
+          i === 0 ? { ...b, status: "failed" } : b,
+        ),
       });
     });
     render(<BoardGrid />);
@@ -119,7 +106,7 @@ describe("BoardGrid — rendering", () => {
     expect(getBoard(0).textContent?.toLowerCase()).toContain("apple");
   });
 
-  it("77: all boards have data-status='locked' after lockAllBoards", () => {
+  it("66: all boards have data-status='locked' after lockAllBoards", () => {
     act(() => {
       boardStore.getState().lockAllBoards();
     });
@@ -131,195 +118,173 @@ describe("BoardGrid — rendering", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Keyboard input
+// Shared keyboard input — all unsolved boards (tests #67–75)
 // ---------------------------------------------------------------------------
 
-describe("BoardGrid — keyboard input", () => {
-  it("78: typing a letter shows it in the active board's current-row first tile", () => {
+describe("BoardGrid — shared keyboard input", () => {
+  it("67: typing a letter updates shared input on ALL unsolved boards", () => {
     render(<BoardGrid />);
     pressKey("c");
-    expect(getTile(0, 0, 0)).toHaveTextContent("C");
+    for (let i = 0; i < 4; i++) {
+      expect(getTile(i, 0, 0)).toHaveTextContent("C");
+    }
   });
 
-  it("79: typing 5 letters fills all 5 tiles of the current row", () => {
+  it("68: typing 5 letters fills current row on all unsolved boards", () => {
     render(<BoardGrid />);
     for (const key of ["a", "p", "p", "l", "e"]) {
       pressKey(key);
     }
-    for (let i = 0; i < 5; i++) {
-      expect(getTile(0, 0, i).textContent).not.toBe("");
+    for (let i = 0; i < 4; i++) {
+      for (let t = 0; t < 5; t++) {
+        expect(getTile(i, 0, t).textContent).not.toBe("");
+      }
     }
   });
 
-  it("80: typing a 6th letter has no effect — input is capped at 5 characters", () => {
+  it("69: typing 6th letter has no effect on any board — shared input capped at 5", () => {
     render(<BoardGrid />);
     for (const key of ["a", "p", "p", "l", "e", "x"]) {
       pressKey(key);
     }
-    expect(boardStore.getState().boards[0].currentInput).toHaveLength(5);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toHaveLength(5);
   });
 
-  it("81: Backspace removes the last typed character", () => {
+  it("70: backspace removes last letter from all unsolved boards", () => {
     render(<BoardGrid />);
-    for (const key of ["a", "p", "p"]) {
-      pressKey(key);
+    for (const key of ["a", "p", "p"]) pressKey(key);
+    pressKey("Backspace");
+    for (let i = 0; i < 4; i++) {
+      expect(getTile(i, 0, 2).textContent).toBe("");
     }
-    pressKey("Backspace");
-    // After backspace, currentInput is "AP"; tile at index 2 should be empty
-    expect(getTile(0, 0, 2).textContent).toBe("");
   });
 
-  it("82: Backspace on an empty row is a no-op", () => {
+  it("71: backspace on empty row is a no-op on all boards", () => {
     render(<BoardGrid />);
     pressKey("Backspace");
+    for (let i = 0; i < 4; i++) {
+      expect(getTile(i, 0, 0).textContent).toBe("");
+    }
+  });
+
+  it("72: typing does not appear on solved board", () => {
+    act(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    });
+    render(<BoardGrid />);
+    pressKey("c");
+    // Board 0 is solved with 1 submitted guess; row 1 (next potential row) stays empty
+    expect(getTile(0, 1, 0).textContent).toBe("");
+    // Unsolved boards show the typed letter in their current row
+    expect(getTile(1, 0, 0)).toHaveTextContent("C");
+  });
+
+  it("73: typing does not appear on failed board", () => {
+    act(() => {
+      boardStore.setState({
+        boards: boardStore.getState().boards.map((b, i) =>
+          i === 0 ? { ...b, status: "failed" } : b,
+        ),
+      });
+    });
+    render(<BoardGrid />);
+    pressKey("c");
     expect(getTile(0, 0, 0).textContent).toBe("");
+    expect(getTile(1, 0, 0)).toHaveTextContent("C");
   });
 
-  it("83: typing has no effect on idle boards — only the active board receives input", () => {
-    render(<BoardGrid />);
-    pressKey("c");
-    // Board 1 is idle; its first tile must stay empty
-    expect(getTile(1, 0, 0).textContent).toBe("");
-  });
-
-  it("84: all keyboard input is blocked when all boards are in terminal states", () => {
+  it("74: typing blocked when all boards terminal", () => {
     act(() => {
       boardStore.getState().lockAllBoards();
     });
     render(<BoardGrid />);
     pressKey("c");
-    for (let i = 0; i < 4; i++) {
-      expect(boardStore.getState().boards[i].currentInput).toBe("");
-    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
   });
 
-  it("85: Enter with fewer than 5 letters is ignored — no guess row is consumed", () => {
+  it("75: enter with fewer than 5 letters is ignored on all boards", () => {
     render(<BoardGrid />);
-    for (const key of ["a", "p", "p"]) {
-      pressKey(key);
-    }
+    for (const key of ["a", "p", "p"]) pressKey(key);
     pressKey("Enter");
-    expect(boardStore.getState().boards[0].guesses).toHaveLength(0);
-    expect(boardStore.getState().boards[0].currentInput).toBe("APP");
+    boardStore.getState().boards.forEach((b) => {
+      expect(b.guesses).toHaveLength(0);
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("APP");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Focus and navigation
+// No click-to-focus (test #76)
 // ---------------------------------------------------------------------------
 
-describe("BoardGrid — focus and navigation", () => {
-  it("86: clicking an idle board shifts focus to it and demotes the previously active board", () => {
+describe("BoardGrid — no focus model", () => {
+  it("76: clicking a board does not change any board status — no focus model", () => {
     render(<BoardGrid />);
+    const before = boardStore.getState().boards.map((b) => b.status);
     fireEvent.click(getBoard(2));
-    expect(getBoard(2)).toHaveAttribute("data-status", "active");
-    expect(getBoard(0)).toHaveAttribute("data-status", "idle");
+    const after = boardStore.getState().boards.map((b) => b.status);
+    expect(after).toEqual(before);
   });
+});
 
-  it("87: clicking the already-active board has no effect", () => {
-    render(<BoardGrid />);
-    fireEvent.click(getBoard(0));
-    expect(getBoard(0)).toHaveAttribute("data-status", "active");
-  });
+// ---------------------------------------------------------------------------
+// Visual states and independent result colours (tests #77–79)
+// ---------------------------------------------------------------------------
 
-  it("88: clicking a solved board has no effect — it cannot receive focus", () => {
+describe("BoardGrid — visual states and result colours", () => {
+  it("77: solved board shows completion highlight via data-status='solved'", () => {
     act(() => {
-      boardStore.setState({
-        boards: boardStore
-          .getState()
-          .boards.map((b, i) => (i === 1 ? { ...b, status: "solved" } : b)),
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(1, "grape", ["green", "green", "green", "green", "green"], "solved");
     });
     render(<BoardGrid />);
-    fireEvent.click(getBoard(1));
     expect(getBoard(1)).toHaveAttribute("data-status", "solved");
-    expect(getBoard(0)).toHaveAttribute("data-status", "active");
   });
 
-  it("89: clicking a locked board has no effect", () => {
+  it("78: submitted guess row shows independent result colours per board", () => {
     act(() => {
-      boardStore.getState().lockAllBoards();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyAllResults([
+        { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+        { boardIndex: 1, word: "crane", result: ["green", "green", "green", "green", "green"], boardStatus: "solved" },
+      ]);
     });
     render(<BoardGrid />);
-    fireEvent.click(getBoard(0));
-    expect(getBoard(0)).toHaveAttribute("data-status", "locked");
+    expect(getTile(0, 0, 0)).toHaveAttribute("data-state", "grey");
+    expect(getTile(1, 0, 0)).toHaveAttribute("data-state", "green");
   });
 
-  it("90: focus auto-advances to the next idle board when the active board is solved", () => {
-    render(<BoardGrid />);
+  it("79: different results on different boards from same guess", () => {
     act(() => {
-      boardStore
-        .getState()
-        .applyResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
-    });
-    expect(getBoard(1)).toHaveAttribute("data-status", "active");
-  });
-
-  it("91: auto-advance skips boards that are already in terminal states", () => {
-    // Board 1 is pre-solved; auto-advance from board 0 should land on board 2
-    act(() => {
-      boardStore.setState({
-        boards: boardStore
-          .getState()
-          .boards.map((b, i) => (i === 1 ? { ...b, status: "solved" } : b)),
-      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyAllResults([
+        { boardIndex: 0, word: "crane", result: ["grey", "green", "grey", "grey", "green"], boardStatus: "unsolved" },
+        { boardIndex: 1, word: "crane", result: ["green", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+      ]);
     });
     render(<BoardGrid />);
-    act(() => {
-      boardStore
-        .getState()
-        .applyResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
-    });
-    expect(getBoard(2)).toHaveAttribute("data-status", "active");
-  });
-
-  it("92: no board is active once all four boards are in terminal states", () => {
-    act(() => {
-      WORDS.forEach((_, i) => {
-        boardStore
-          .getState()
-          .applyResult(i, WORDS[i], ["green", "green", "green", "green", "green"], "solved");
-      });
-    });
-    render(<BoardGrid />);
-    for (let i = 0; i < 4; i++) {
-      expect(getBoard(i)).not.toHaveAttribute("data-status", "active");
-    }
+    expect(getTile(0, 0, 0)).toHaveAttribute("data-state", "grey");
+    expect(getTile(1, 0, 0)).toHaveAttribute("data-state", "green");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Result colours
-// ---------------------------------------------------------------------------
-
-describe("BoardGrid — result colours", () => {
-  it("93: submitted guess tiles carry the correct data-result value from the store", () => {
-    const result: TileResult[] = ["grey", "green", "grey", "grey", "green"];
-    act(() => {
-      boardStore.getState().applyResult(0, "crane", result, "active");
-    });
-    render(<BoardGrid />);
-    expect(getTile(0, 0, 0)).toHaveAttribute("data-result", "grey");
-    expect(getTile(0, 0, 1)).toHaveAttribute("data-result", "green");
-    expect(getTile(0, 0, 2)).toHaveAttribute("data-result", "grey");
-    expect(getTile(0, 0, 3)).toHaveAttribute("data-result", "grey");
-    expect(getTile(0, 0, 4)).toHaveAttribute("data-result", "green");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Responsive layout
+// Responsive layout (tests #80–81)
 // ---------------------------------------------------------------------------
 
 describe("BoardGrid — responsive layout", () => {
-  it("94: all boards are present in the DOM at mobile width (375px)", () => {
+  it("80: layout renders at mobile width (375px)", () => {
     Object.defineProperty(window, "innerWidth", { value: 375, configurable: true });
     const { container } = render(<BoardGrid />);
     expect(container.querySelector('[data-board-index="0"]')).toBeInTheDocument();
     expect(container.querySelector('[data-board-index="3"]')).toBeInTheDocument();
   });
 
-  it("95: all boards are present in the DOM at desktop width (1280px)", () => {
+  it("81: layout renders at desktop width (1280px)", () => {
     Object.defineProperty(window, "innerWidth", { value: 1280, configurable: true });
     const { container } = render(<BoardGrid />);
     expect(container.querySelector('[data-board-index="0"]')).toBeInTheDocument();

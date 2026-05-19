@@ -1,36 +1,26 @@
 /**
  * @vitest-environment happy-dom
  *
- * Step 4A — Tile animations (tests #127–137).
+ * F2 Step 1 — Tile static visual states (tests f2#1–f2#12)
  *
- * Tests #127–131 and #135–137 render <Tile /> in isolation.
- * Tests #132–134 render <BoardGrid /> to verify animation-gating behaviour at
- * the board level, since that is where stagger timing and the submitting flag live.
- *
- * Expected <Tile /> prop surface:
- *   letter:     string          — character to display (empty string for blank tiles)
- *   result?:    TileResult      — absent on unsubmitted tiles
- *   tileIndex:  number          — 0–4; used to compute the left-to-right animation-delay
- *   isFlipping?: boolean        — true while the flip reveal is playing
- *   isShaking?:  boolean        — true while the invalid-word shake is playing
- *
- * Expected DOM conventions (matching BoardGrid.test.tsx):
- *   data-result="{green|yellow|grey}"  — present only after submission
- *   data-flipping="true"               — present only while flipping
- *   data-shaking="true"                — present only while shaking
- *   style.animationDelay               — inline ms delay for the left-to-right stagger
+ * Tile API (F2):  letter: string | null,  state: TileState
+ * DOM convention: data-state="empty|typing|green|yellow|grey"
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { Tile } from "./Tile";
 import { BoardGrid } from "./BoardGrid";
 import { boardStore } from "../store/boardStore";
-import type { TileResult } from "shared/types/game";
+
+// Cast to accept the F2 prop surface during tests; type-checked by tsc separately.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const F2Tile = Tile as any;
 
 const WORDS = ["apple", "grape", "stone", "light"];
 
 function resetAndInit() {
-  boardStore.setState({ boards: [] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (boardStore.setState as (s: any) => void)({ boards: [], currentInput: "", submitting: false });
   boardStore.getState().initBoards(WORDS);
 }
 
@@ -43,113 +33,153 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Colour display (tests #127–130)
+// F2 Step 1 — static visual states (f2#1–f2#12)
 // ---------------------------------------------------------------------------
 
-describe("Tile — colour display", () => {
-  it("127: unsubmitted tile has no data-result attribute", () => {
-    const { container } = render(
-      <Tile letter="" result={undefined} tileIndex={0} />,
-    );
-    expect(container.firstChild).not.toHaveAttribute("data-result");
+describe("Tile — static visual states (F2)", () => {
+  it("f2#1: empty tile renders no letter", () => {
+    const { container } = render(<F2Tile letter={null} state="empty" />);
+    expect(container.firstChild).toBeInTheDocument();
+    expect(container.firstChild).toHaveTextContent("");
+    expect(container.firstChild).toHaveAttribute("data-state", "empty");
   });
 
-  it("128: tile with result='green' has data-result='green'", () => {
-    const { container } = render(
-      <Tile letter="C" result="green" tileIndex={0} />,
-    );
-    expect(container.firstChild).toHaveAttribute("data-result", "green");
+  it("f2#2: typing tile shows letter, no colour state", () => {
+    const { container } = render(<F2Tile letter="C" state="typing" />);
+    expect(container.firstChild).toHaveTextContent("C");
+    expect(container.firstChild).toHaveAttribute("data-state", "typing");
+    expect(container.firstChild).not.toHaveAttribute("data-state", "green");
+    expect(container.firstChild).not.toHaveAttribute("data-state", "yellow");
+    expect(container.firstChild).not.toHaveAttribute("data-state", "grey");
   });
 
-  it("129: tile with result='yellow' has data-result='yellow'", () => {
-    const { container } = render(
-      <Tile letter="R" result="yellow" tileIndex={0} />,
-    );
-    expect(container.firstChild).toHaveAttribute("data-result", "yellow");
+  it("f2#3: typing tile has highlighted border state — data-state='typing'", () => {
+    const { container } = render(<F2Tile letter="A" state="typing" />);
+    expect(container.firstChild).toHaveAttribute("data-state", "typing");
   });
 
-  it("130: tile with result='grey' has data-result='grey'", () => {
-    const { container } = render(
-      <Tile letter="A" result="grey" tileIndex={0} />,
-    );
-    expect(container.firstChild).toHaveAttribute("data-result", "grey");
+  it("f2#4: green tile shows letter and green state", () => {
+    const { container } = render(<F2Tile letter="R" state="green" />);
+    expect(container.firstChild).toHaveTextContent("R");
+    expect(container.firstChild).toHaveAttribute("data-state", "green");
+  });
+
+  it("f2#5: yellow tile shows letter and yellow state", () => {
+    const { container } = render(<F2Tile letter="E" state="yellow" />);
+    expect(container.firstChild).toHaveTextContent("E");
+    expect(container.firstChild).toHaveAttribute("data-state", "yellow");
+  });
+
+  it("f2#6: grey tile shows letter and grey state", () => {
+    const { container } = render(<F2Tile letter="X" state="grey" />);
+    expect(container.firstChild).toHaveTextContent("X");
+    expect(container.firstChild).toHaveAttribute("data-state", "grey");
+  });
+
+  it("f2#7: green tile has no yellow or grey state", () => {
+    const { container } = render(<F2Tile letter="R" state="green" />);
+    expect(container.firstChild).toHaveAttribute("data-state", "green");
+    expect(container.firstChild).not.toHaveAttribute("data-state", "yellow");
+    expect(container.firstChild).not.toHaveAttribute("data-state", "grey");
+  });
+
+  it("f2#8: yellow tile has no green or grey state", () => {
+    const { container } = render(<F2Tile letter="E" state="yellow" />);
+    expect(container.firstChild).not.toHaveAttribute("data-state", "green");
+    expect(container.firstChild).toHaveAttribute("data-state", "yellow");
+    expect(container.firstChild).not.toHaveAttribute("data-state", "grey");
+  });
+
+  it("f2#9: grey tile has no green or yellow state", () => {
+    const { container } = render(<F2Tile letter="X" state="grey" />);
+    expect(container.firstChild).not.toHaveAttribute("data-state", "green");
+    expect(container.firstChild).not.toHaveAttribute("data-state", "yellow");
+    expect(container.firstChild).toHaveAttribute("data-state", "grey");
+  });
+
+  it("f2#10: all tile states render without throwing", () => {
+    const states = ["empty", "typing", "green", "yellow", "grey"];
+    for (const state of states) {
+      expect(() => render(<F2Tile letter="A" state={state} />)).not.toThrow();
+    }
+  });
+
+  it("f2#11: tile renders letter in uppercase", () => {
+    const { container } = render(<F2Tile letter="c" state="typing" />);
+    expect(container.firstChild).toHaveTextContent("C");
+    expect(container.firstChild).not.toHaveTextContent("c");
+  });
+
+  it("f2#12: TileState type — all five valid values produce the expected data-state attribute", () => {
+    // Compile-time rejection of invalid values (e.g. 'blue') is enforced by
+    // `npm run typecheck:all`.  This runtime test confirms the five valid values
+    // each produce the correct data-state attribute.
+    const validStates = ["empty", "typing", "green", "yellow", "grey"] as const;
+    for (const state of validStates) {
+      const { container } = render(<F2Tile letter="A" state={state} />);
+      expect(container.firstChild).toHaveAttribute("data-state", state);
+    }
   });
 });
 
 // ---------------------------------------------------------------------------
-// Flip animation (tests #131–134)
+// Keyboard gate — submitting flag (tests #120–#121)
+// Tests #114–#119 and #122–#124 tested the pre-F2 Tile API (result/isFlipping/
+// isShaking props) and are superseded by f2#1–f2#12 and f2#32–f2#68.
 // ---------------------------------------------------------------------------
 
-describe("Tile — flip animation", () => {
-  it("131: data-flipping='true' is present when isFlipping is true", () => {
-    const { container } = render(
-      <Tile letter="C" result="green" tileIndex={0} isFlipping />,
-    );
-    expect(container.firstChild).toHaveAttribute("data-flipping", "true");
-  });
-
-  it("132: tile 0 has a lower animation-delay than tile 4 — left-to-right stagger", () => {
-    const { container: c0 } = render(
-      <Tile letter="C" result="green" tileIndex={0} isFlipping />,
-    );
-    const { container: c4 } = render(
-      <Tile letter="E" result="green" tileIndex={4} isFlipping />,
-    );
-    const tile0 = c0.firstChild as HTMLElement;
-    const tile4 = c4.firstChild as HTMLElement;
-    const delay0 = parseFloat(tile0.style.animationDelay ?? "0");
-    const delay4 = parseFloat(tile4.style.animationDelay ?? "0");
-    expect(delay0).toBeLessThan(delay4);
-  });
-
-  it("133: keyboard input is blocked while the active board has submitting=true", () => {
+describe("Tile — keyboard gate (via BoardGrid)", () => {
+  it("120: keyboard input is blocked while the global submitting flag is true", () => {
     render(<BoardGrid />);
     act(() => {
-      boardStore.getState().setSubmitting(0, true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).setSubmitting(true);
     });
     fireEvent.keyDown(document.body, { key: "c" });
-    expect(boardStore.getState().boards[0].currentInput).toBe("");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
   });
 
-  it("134: keyboard input is accepted again once submitting is cleared", () => {
+  it("121: keyboard input is accepted again once global submitting is cleared", () => {
     render(<BoardGrid />);
     act(() => {
-      boardStore.getState().setSubmitting(0, true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).setSubmitting(true);
     });
-    // Simulate the animation completion callback clearing the flag
     act(() => {
-      boardStore.getState().setSubmitting(0, false);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).setSubmitting(false);
     });
     fireEvent.keyDown(document.body, { key: "c" });
-    expect(boardStore.getState().boards[0].currentInput).toBe("C");
-  });
-
-  it("137: tile does not have data-flipping when only isShaking is true", () => {
-    const { container } = render(
-      <Tile letter="C" result={undefined} tileIndex={0} isShaking />,
-    );
-    expect(container.firstChild).not.toHaveAttribute("data-flipping", "true");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("C");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Shake animation (tests #135–136)
+// Solved-board animation exclusion (test #125)
 // ---------------------------------------------------------------------------
 
-describe("Tile — shake animation", () => {
-  it("135: data-shaking='true' is present when isShaking is true", () => {
-    const { container } = render(
-      <Tile letter="C" result={undefined} tileIndex={0} isShaking />,
-    );
-    expect(container.firstChild).toHaveAttribute("data-shaking", "true");
-  });
-
-  it("136: data-shaking is absent once isShaking is set back to false", () => {
-    const { container, rerender } = render(
-      <Tile letter="C" result={undefined} tileIndex={0} isShaking />,
-    );
-    expect(container.firstChild).toHaveAttribute("data-shaking", "true");
-    rerender(<Tile letter="C" result={undefined} tileIndex={0} isShaking={false} />);
-    expect(container.firstChild).not.toHaveAttribute("data-shaking", "true");
+describe("Tile — solved board excluded from animation", () => {
+  it("125: solved board tiles do not have data-flipping after subsequent shared guess", () => {
+    render(<BoardGrid />);
+    act(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    });
+    act(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).setSubmitting(true);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyAllResults([
+        { boardIndex: 1, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+        { boardIndex: 2, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+        { boardIndex: 3, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+      ]);
+    });
+    const board0Tile = document.querySelector(
+      '[data-board-index="0"] [data-row-index="0"] [data-tile-index="0"]',
+    ) as HTMLElement;
+    expect(board0Tile).not.toHaveAttribute("data-flipping", "true");
   });
 });

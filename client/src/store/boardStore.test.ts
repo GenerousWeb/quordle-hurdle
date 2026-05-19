@@ -1,15 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  boardStore,
-  activeBoard,
-  activeBoardIndex,
-  allTerminal,
-} from "./boardStore";
+import { boardStore, allTerminal, unsolvedBoards } from "./boardStore";
 
-const WORDS = ["CRANE", "SLATE", "GROVE", "AUDIO"];
+const WORDS = ["apple", "grape", "stone", "light"];
 
 function reset() {
-  boardStore.setState({ boards: [] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (boardStore.setState as (s: any) => void)({ boards: [], currentInput: "", submitting: false });
 }
 
 function init() {
@@ -20,21 +16,19 @@ beforeEach(() => {
   reset();
 });
 
+// ---------------------------------------------------------------------------
+// initBoards (tests #23–27)
+// ---------------------------------------------------------------------------
+
 describe("initBoards", () => {
-  it("board 0 is active after init", () => {
+  it("23: all boards set to unsolved", () => {
     init();
-    expect(boardStore.getState().boards[0].status).toBe("active");
+    boardStore.getState().boards.forEach((b) => {
+      expect(b.status).toBe("unsolved");
+    });
   });
 
-  it("boards 1–3 are idle after init", () => {
-    init();
-    const { boards } = boardStore.getState();
-    expect(boards[1].status).toBe("idle");
-    expect(boards[2].status).toBe("idle");
-    expect(boards[3].status).toBe("idle");
-  });
-
-  it("each board's targetWord is set from the words array", () => {
+  it("24: target words set correctly", () => {
     init();
     const { boards } = boardStore.getState();
     WORDS.forEach((word, i) => {
@@ -42,344 +36,370 @@ describe("initBoards", () => {
     });
   });
 
-  it("all boards start with empty guesses", () => {
+  it("25: global currentInput is empty", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
+  });
+
+  it("26: all guess arrays are empty", () => {
     init();
     boardStore.getState().boards.forEach((b) => {
       expect(b.guesses).toHaveLength(0);
     });
   });
 
-  it("all boards start with empty currentInput, zero attemptCount, submitting false", () => {
+  it("27: resets previous round state", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "crane", ["grey", "grey", "grey", "grey", "grey"], "unsolved");
     init();
     boardStore.getState().boards.forEach((b) => {
-      expect(b.currentInput).toBe("");
-      expect(b.attemptCount).toBe(0);
-      expect(b.submitting).toBe(false);
+      expect(b.guesses).toHaveLength(0);
     });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
   });
 });
+
+// ---------------------------------------------------------------------------
+// appendLetter — shared input (tests #28–31)
+// ---------------------------------------------------------------------------
 
 describe("appendLetter", () => {
-  it("appends a letter to the active board's currentInput", () => {
+  it("28: appends to shared currentInput", () => {
     init();
-    boardStore.getState().appendLetter(0, "A");
-    expect(boardStore.getState().boards[0].currentInput).toBe("A");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).appendLetter("C");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("C");
   });
 
-  it("appends multiple letters up to 5", () => {
+  it("29: stops at 5 characters", () => {
     init();
-    const { appendLetter } = boardStore.getState();
-    "CRANE".split("").forEach((l) => appendLetter(0, l));
-    expect(boardStore.getState().boards[0].currentInput).toBe("CRANE");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { appendLetter } = boardStore.getState() as any;
+    "CRANEX".split("").forEach((l: string) => appendLetter(l));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput.length).toBe(5);
   });
 
-  it("stops at 5 characters — 6th append is ignored", () => {
-    init();
-    const { appendLetter } = boardStore.getState();
-    "CRANEX".split("").forEach((l) => appendLetter(0, l));
-    expect(boardStore.getState().boards[0].currentInput).toBe("CRANE");
-  });
-
-  it("is a no-op on an idle board", () => {
-    init();
-    boardStore.getState().appendLetter(1, "A");
-    expect(boardStore.getState().boards[1].currentInput).toBe("");
-  });
-
-  it("is a no-op on a locked board", () => {
-    init();
-    boardStore.getState().lockAllBoards();
-    boardStore.getState().appendLetter(0, "A");
-    expect(boardStore.getState().boards[0].currentInput).toBe("");
-  });
-});
-
-describe("deleteLetter", () => {
-  it("removes the last character from currentInput", () => {
-    init();
-    boardStore.getState().appendLetter(0, "A");
-    boardStore.getState().appendLetter(0, "B");
-    boardStore.getState().deleteLetter(0);
-    expect(boardStore.getState().boards[0].currentInput).toBe("A");
-  });
-
-  it("is a no-op when currentInput is already empty", () => {
-    init();
-    boardStore.getState().deleteLetter(0);
-    expect(boardStore.getState().boards[0].currentInput).toBe("");
-  });
-
-  it("is a no-op on an idle board", () => {
-    init();
-    // artificially set input on idle board to check delete has no effect
-    boardStore.setState({
-      boards: boardStore.getState().boards.map((b, i) =>
-        i === 1 ? { ...b, currentInput: "AB" } : b,
-      ),
-    });
-    boardStore.getState().deleteLetter(1);
-    expect(boardStore.getState().boards[1].currentInput).toBe("AB");
-  });
-});
-
-describe("setSubmitting", () => {
-  it("sets submitting to true on the active board", () => {
-    init();
-    boardStore.getState().setSubmitting(0, true);
-    expect(boardStore.getState().boards[0].submitting).toBe(true);
-  });
-
-  it("sets submitting back to false", () => {
-    init();
-    boardStore.getState().setSubmitting(0, true);
-    boardStore.getState().setSubmitting(0, false);
-    expect(boardStore.getState().boards[0].submitting).toBe(false);
-  });
-
-  it("is a no-op on an idle board", () => {
-    init();
-    boardStore.getState().setSubmitting(1, true);
-    expect(boardStore.getState().boards[1].submitting).toBe(false);
-  });
-});
-
-describe("applyResult", () => {
-  it("appends a GuessRow to guesses", () => {
-    init();
-    boardStore.getState().applyResult(0, "CRANE", ["green", "green", "green", "green", "green"], "solved");
-    expect(boardStore.getState().boards[0].guesses).toHaveLength(1);
-    expect(boardStore.getState().boards[0].guesses[0]).toEqual({
-      word: "CRANE",
-      result: ["green", "green", "green", "green", "green"],
-    });
-  });
-
-  it("increments attemptCount", () => {
-    init();
-    boardStore.getState().applyResult(0, "CRANE", ["grey", "grey", "grey", "grey", "grey"], "active");
-    expect(boardStore.getState().boards[0].attemptCount).toBe(1);
-  });
-
-  it("clears currentInput after applying result", () => {
-    init();
-    boardStore.getState().appendLetter(0, "C");
-    boardStore.getState().applyResult(0, "CRANE", ["grey", "grey", "grey", "grey", "grey"], "active");
-    expect(boardStore.getState().boards[0].currentInput).toBe("");
-  });
-
-  it("clears submitting flag after applying result", () => {
-    init();
-    boardStore.getState().setSubmitting(0, true);
-    boardStore.getState().applyResult(0, "CRANE", ["grey", "grey", "grey", "grey", "grey"], "active");
-    expect(boardStore.getState().boards[0].submitting).toBe(false);
-  });
-
-  it("transitions status to solved", () => {
-    init();
-    boardStore.getState().applyResult(0, "CRANE", ["green", "green", "green", "green", "green"], "solved");
-    expect(boardStore.getState().boards[0].status).toBe("solved");
-  });
-
-  it("transitions status to failed", () => {
-    init();
-    boardStore.getState().applyResult(0, "CRANE", ["grey", "grey", "grey", "grey", "grey"], "failed");
-    expect(boardStore.getState().boards[0].status).toBe("failed");
-  });
-
-  it("keeps board active when boardStatus is active", () => {
-    init();
-    boardStore.getState().applyResult(0, "CRANE", ["grey", "grey", "grey", "grey", "grey"], "active");
-    expect(boardStore.getState().boards[0].status).toBe("active");
-  });
-
-  it("is a no-op for an out-of-range boardIndex", () => {
-    init();
-    const before = boardStore.getState().boards;
-    boardStore.getState().applyResult(4, "CRANE", ["grey", "grey", "grey", "grey", "grey"], "active");
-    expect(boardStore.getState().boards).toEqual(before);
-  });
-});
-
-describe("lockAllBoards", () => {
-  it("transitions active board to locked", () => {
-    init();
-    boardStore.getState().lockAllBoards();
-    expect(boardStore.getState().boards[0].status).toBe("locked");
-  });
-
-  it("transitions idle boards to locked", () => {
-    init();
-    boardStore.getState().lockAllBoards();
-    expect(boardStore.getState().boards[1].status).toBe("locked");
-    expect(boardStore.getState().boards[2].status).toBe("locked");
-    expect(boardStore.getState().boards[3].status).toBe("locked");
-  });
-
-  it("does not affect solved boards", () => {
-    init();
-    boardStore.getState().applyResult(0, "CRANE", ["green", "green", "green", "green", "green"], "solved");
-    boardStore.getState().lockAllBoards();
-    expect(boardStore.getState().boards[0].status).toBe("solved");
-  });
-
-  it("does not affect failed boards", () => {
-    init();
-    boardStore.getState().applyResult(0, "CRANE", ["grey", "grey", "grey", "grey", "grey"], "failed");
-    boardStore.getState().lockAllBoards();
-    expect(boardStore.getState().boards[0].status).toBe("failed");
-  });
-
-  it("clears currentInput on boards being locked", () => {
-    init();
-    boardStore.getState().appendLetter(0, "A");
-    boardStore.getState().appendLetter(0, "B");
-    boardStore.getState().lockAllBoards();
-    expect(boardStore.getState().boards[0].currentInput).toBe("");
-  });
-});
-
-describe("setFocus", () => {
-  it("activates an idle board and deactivates the previously active board", () => {
-    init();
-    boardStore.getState().setFocus(1);
-    expect(boardStore.getState().boards[0].status).toBe("idle");
-    expect(boardStore.getState().boards[1].status).toBe("active");
-  });
-
-  it("is a no-op when target board is solved", () => {
-    init();
-    // use setState directly to avoid applyResult's advanceFocus side-effect
-    boardStore.setState({
-      boards: boardStore.getState().boards.map((b, i) =>
-        i === 1 ? { ...b, status: "solved" } : b,
-      ),
-    });
-    boardStore.getState().setFocus(1);
-    expect(boardStore.getState().boards[1].status).toBe("solved");
-    expect(boardStore.getState().boards[0].status).toBe("active");
-  });
-
-  it("is a no-op when target board is failed", () => {
-    init();
-    boardStore.getState().applyResult(1, "SLATE", ["grey", "grey", "grey", "grey", "grey"], "failed");
-    boardStore.getState().setFocus(1);
-    expect(boardStore.getState().boards[1].status).toBe("failed");
-  });
-
-  it("is a no-op when target board is locked", () => {
-    init();
-    boardStore.getState().lockAllBoards();
-    boardStore.getState().setFocus(2);
-    expect(boardStore.getState().boards[2].status).toBe("locked");
-  });
-});
-
-describe("advanceFocus", () => {
-  it("moves focus to the next idle board", () => {
-    init();
-    boardStore.getState().advanceFocus(0);
-    expect(boardStore.getState().boards[1].status).toBe("active");
-    expect(boardStore.getState().boards[0].status).toBe("idle");
-  });
-
-  it("skips non-idle boards and finds the next available", () => {
-    init();
-    // use setState directly to mark board 1 solved without triggering advanceFocus side-effect
-    boardStore.setState({
-      boards: boardStore.getState().boards.map((b, i) =>
-        i === 1 ? { ...b, status: "solved" } : b,
-      ),
-    });
-    // board 0 active, board 1 solved, boards 2-3 idle; advance from 0 → skips solved(1), finds idle(2)
-    boardStore.getState().advanceFocus(0);
-    expect(boardStore.getState().boards[2].status).toBe("active");
-  });
-
-  it("wraps around from the end", () => {
-    init();
-    // mark boards 1, 2, 3 all as idle (already are); advance from board 3
-    boardStore.getState().setFocus(3);
-    boardStore.getState().advanceFocus(3);
-    expect(boardStore.getState().boards[0].status).toBe("active");
-  });
-
-  it("sets no board active when all remaining boards are terminal", () => {
-    init();
-    // solve/fail all boards
-    boardStore.getState().applyResult(0, "CRANE", ["green", "green", "green", "green", "green"], "solved");
-    boardStore.getState().applyResult(1, "SLATE", ["green", "green", "green", "green", "green"], "solved");
-    boardStore.getState().applyResult(2, "GROVE", ["green", "green", "green", "green", "green"], "solved");
-    boardStore.getState().applyResult(3, "AUDIO", ["grey", "grey", "grey", "grey", "grey"], "failed");
-    boardStore.getState().advanceFocus(3);
-    const { boards } = boardStore.getState();
-    const hasActive = boards.some((b) => b.status === "active");
-    expect(hasActive).toBe(false);
-  });
-});
-
-describe("activeBoard selector", () => {
-  it("returns the active board object", () => {
-    init();
-    const board = activeBoard(boardStore.getState());
-    expect(board).not.toBeNull();
-    expect(board?.status).toBe("active");
-    expect(board?.targetWord).toBe("CRANE");
-  });
-
-  it("returns null when no board is active", () => {
-    init();
-    boardStore.getState().lockAllBoards();
-    expect(activeBoard(boardStore.getState())).toBeNull();
-  });
-});
-
-describe("activeBoardIndex selector", () => {
-  it("returns the index of the active board", () => {
-    init();
-    expect(activeBoardIndex(boardStore.getState())).toBe(0);
-  });
-
-  it("returns the correct index after focus shifts", () => {
-    init();
-    boardStore.getState().setFocus(2);
-    expect(activeBoardIndex(boardStore.getState())).toBe(2);
-  });
-
-  it("returns null when no board is active", () => {
-    init();
-    boardStore.getState().lockAllBoards();
-    expect(activeBoardIndex(boardStore.getState())).toBeNull();
-  });
-});
-
-describe("allTerminal selector", () => {
-  it("returns false when boards are active/idle", () => {
-    init();
-    expect(allTerminal(boardStore.getState())).toBe(false);
-  });
-
-  it("returns true when all boards are solved", () => {
+  it("30: blocked when all boards terminal", () => {
     init();
     WORDS.forEach((_, i) => {
-      boardStore.getState().applyResult(i, WORDS[i], ["green", "green", "green", "green", "green"], "solved");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(i, "apple", ["green", "green", "green", "green", "green"], "solved");
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).appendLetter("C");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
+  });
+
+  it("31: builds word correctly", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { appendLetter } = boardStore.getState() as any;
+    "CRANE".split("").forEach((l: string) => appendLetter(l));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("CRANE");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteLetter — shared input (tests #32–34)
+// ---------------------------------------------------------------------------
+
+describe("deleteLetter", () => {
+  it("32: removes last character from shared input", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    "ABC".split("").forEach((l: string) => state.appendLetter(l));
+    state.deleteLetter();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput.length).toBe(2);
+  });
+
+  it("33: no-op on empty shared input", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).deleteLetter();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
+  });
+
+  it("34: blocked when all boards terminal", () => {
+    init();
+    WORDS.forEach((_, i) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(i, "apple", ["green", "green", "green", "green", "green"], "solved");
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).deleteLetter();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setSubmitting — global flag (tests #35–36)
+// ---------------------------------------------------------------------------
+
+describe("setSubmitting", () => {
+  it("35: sets global flag true", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).setSubmitting(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).submitting).toBe(true);
+  });
+
+  it("36: sets global flag false", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    state.setSubmitting(true);
+    state.setSubmitting(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).submitting).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyBoardResult (tests #37–42)
+// ---------------------------------------------------------------------------
+
+describe("applyBoardResult", () => {
+  it("37: guess appended to correct board", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "crane", ["grey", "green", "grey", "grey", "green"], "unsolved");
+    expect(boardStore.getState().boards[0].guesses).toHaveLength(1);
+  });
+
+  it("38: correct word and result stored", () => {
+    init();
+    const result = ["grey", "green", "grey", "grey", "green"] as const;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "crane", [...result], "unsolved");
+    expect(boardStore.getState().boards[0].guesses[0]).toEqual({ word: "crane", result: [...result] });
+  });
+
+  it("39: status stays unsolved", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "crane", ["grey", "grey", "grey", "grey", "grey"], "unsolved");
+    expect(boardStore.getState().boards[0].status).toBe("unsolved");
+  });
+
+  it("40: status transitions to solved", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    expect(boardStore.getState().boards[0].status).toBe("solved");
+  });
+
+  it("41: status transitions to failed", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "crane", ["grey", "grey", "grey", "grey", "grey"], "failed");
+    expect(boardStore.getState().boards[0].status).toBe("failed");
+  });
+
+  it("42: other boards unaffected", () => {
+    init();
+    const before = boardStore.getState().boards.slice(1).map((b) => ({ ...b }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "crane", ["grey", "grey", "grey", "grey", "grey"], "unsolved");
+    const after = boardStore.getState().boards.slice(1);
+    expect(after).toEqual(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyAllResults (tests #43–47)
+// ---------------------------------------------------------------------------
+
+describe("applyAllResults", () => {
+  it("43: applies results to multiple boards at once", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyAllResults([
+      { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+      { boardIndex: 2, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+    ]);
+    expect(boardStore.getState().boards[0].guesses).toHaveLength(1);
+    expect(boardStore.getState().boards[2].guesses).toHaveLength(1);
+    expect(boardStore.getState().boards[1].guesses).toHaveLength(0);
+    expect(boardStore.getState().boards[3].guesses).toHaveLength(0);
+  });
+
+  it("44: does not alter shared currentInput — animation gate (BoardGrid) is responsible", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    "CRANE".split("").forEach((l: string) => state.appendLetter(l));
+    state.applyAllResults([
+      { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("CRANE");
+  });
+
+  it("45: does not alter global submitting — animation gate (BoardGrid) is responsible", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    state.setSubmitting(true);
+    state.applyAllResults([
+      { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).submitting).toBe(true);
+  });
+
+  it("46: one board solves, others stay unsolved", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyAllResults([
+      { boardIndex: 1, word: "grape", result: ["green", "green", "green", "green", "green"], boardStatus: "solved" },
+    ]);
+    expect(boardStore.getState().boards[1].status).toBe("solved");
+    expect(boardStore.getState().boards[0].status).toBe("unsolved");
+    expect(boardStore.getState().boards[2].status).toBe("unsolved");
+    expect(boardStore.getState().boards[3].status).toBe("unsolved");
+  });
+
+  it("47: multiple boards solve simultaneously", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyAllResults([
+      { boardIndex: 0, word: "apple", result: ["green", "green", "green", "green", "green"], boardStatus: "solved" },
+      { boardIndex: 2, word: "stone", result: ["green", "green", "green", "green", "green"], boardStatus: "solved" },
+    ]);
+    expect(boardStore.getState().boards[0].status).toBe("solved");
+    expect(boardStore.getState().boards[2].status).toBe("solved");
+    expect(boardStore.getState().boards[1].status).toBe("unsolved");
+    expect(boardStore.getState().boards[3].status).toBe("unsolved");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lockAllBoards (tests #48–51)
+// ---------------------------------------------------------------------------
+
+describe("lockAllBoards", () => {
+  it("48: unsolved boards locked", () => {
+    init();
+    boardStore.getState().lockAllBoards();
+    boardStore.getState().boards.forEach((b) => {
+      expect(b.status).toBe("locked");
+    });
+  });
+
+  it("49: solved board unchanged", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    boardStore.getState().lockAllBoards();
+    expect(boardStore.getState().boards[0].status).toBe("solved");
+  });
+
+  it("50: failed board unchanged", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "crane", ["grey", "grey", "grey", "grey", "grey"], "failed");
+    boardStore.getState().lockAllBoards();
+    expect(boardStore.getState().boards[0].status).toBe("failed");
+  });
+
+  it("51: shared currentInput cleared", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    "CRANE".split("").forEach((l: string) => state.appendLetter(l));
+    boardStore.getState().lockAllBoards();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// allTerminal selector (tests #52–55)
+// ---------------------------------------------------------------------------
+
+describe("allTerminal selector", () => {
+  it("52: false during active round", () => {
+    init();
+    expect(allTerminal(boardStore.getState())).toBe(false);
+  });
+
+  it("53: true when all solved", () => {
+    init();
+    WORDS.forEach((_, i) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(i, WORDS[i], ["green", "green", "green", "green", "green"], "solved");
     });
     expect(allTerminal(boardStore.getState())).toBe(true);
   });
 
-  it("returns true when mix of solved, failed, and locked", () => {
+  it("54: true on mix of terminal states", () => {
     init();
-    boardStore.getState().applyResult(0, "CRANE", ["green", "green", "green", "green", "green"], "solved");
-    boardStore.getState().applyResult(1, "SLATE", ["grey", "grey", "grey", "grey", "grey"], "failed");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(1, "grape", ["grey", "grey", "grey", "grey", "grey"], "failed");
     boardStore.getState().lockAllBoards();
     expect(allTerminal(boardStore.getState())).toBe(true);
   });
 
-  it("returns false when even one board is idle", () => {
+  it("55: false when one board still unsolved", () => {
     init();
-    boardStore.getState().applyResult(0, "CRANE", ["green", "green", "green", "green", "green"], "solved");
-    boardStore.getState().applyResult(1, "SLATE", ["grey", "grey", "grey", "grey", "grey"], "failed");
-    boardStore.getState().applyResult(2, "GROVE", ["green", "green", "green", "green", "green"], "solved");
-    // board 3 still idle
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(1, "grape", ["grey", "grey", "grey", "grey", "grey"], "failed");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(2, "stone", ["green", "green", "green", "green", "green"], "solved");
+    // board 3 still unsolved
     expect(allTerminal(boardStore.getState())).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// unsolvedBoards selector (tests #56–59)
+// ---------------------------------------------------------------------------
+
+describe("unsolvedBoards selector", () => {
+  it("56: returns all boards on init", () => {
+    init();
+    expect(unsolvedBoards(boardStore.getState())).toHaveLength(4);
+  });
+
+  it("57: excludes solved board", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(1, "grape", ["green", "green", "green", "green", "green"], "solved");
+    const unsolved = unsolvedBoards(boardStore.getState());
+    expect(unsolved).toHaveLength(3);
+    expect(unsolved.some((b) => b.targetWord === "grape")).toBe(false);
+  });
+
+  it("58: excludes failed board", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(2, "crane", ["grey", "grey", "grey", "grey", "grey"], "failed");
+    const unsolved = unsolvedBoards(boardStore.getState());
+    expect(unsolved).toHaveLength(3);
+  });
+
+  it("59: returns empty when all terminal", () => {
+    init();
+    WORDS.forEach((_, i) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (boardStore.getState() as any).applyBoardResult(i, WORDS[i], ["green", "green", "green", "green", "green"], "solved");
+    });
+    expect(unsolvedBoards(boardStore.getState())).toHaveLength(0);
   });
 });
