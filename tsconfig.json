@@ -21,7 +21,11 @@
     "jsx": "react-jsx",
     "rootDirs": [".", "./.react-router/types"],
     "paths": {
-      "~/*": ["./app/*"]
+      "~/*": ["./app/*"],
+      "shared/*": ["./shared/*"],
+      "client/components/*": ["./client/src/components/*"],
+      "client/store/*": ["./client/src/store/*"],
+      "client/socket/*": ["./client/src/socket/*"]
     },
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,

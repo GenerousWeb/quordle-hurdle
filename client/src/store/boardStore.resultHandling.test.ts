@@ -4,7 +4,8 @@ import { boardStore } from "./boardStore";
 const WORDS = ["apple", "grape", "stone", "light"];
 
 function reset() {
-  boardStore.setState({ boards: [] });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (boardStore.setState as (s: any) => void)({ boards: [], currentInput: "", submitting: false });
 }
 
 function init() {
@@ -15,108 +16,144 @@ beforeEach(() => {
   reset();
 });
 
-// Tests #116–121: how the store responds to a successful guess_result from the server
+// Tests #103–108: how the store responds to a successful guess_result from the server.
+// The server evaluates each unsolved board independently and returns boards[].
+// applyAllResults writes all results atomically. currentInput and submitting are cleared
+// by the BoardGrid animation gate after the flip animation completes — NOT by the store.
 
 describe("guess_result — success path", () => {
-  it("116: guess is appended to the board's guess history", () => {
+  it("103: guess added to all evaluated boards", () => {
     init();
-    boardStore
-      .getState()
-      .applyResult(0, "crane", ["grey", "green", "grey", "grey", "green"], "active");
-    expect(boardStore.getState().boards[0].guesses).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyAllResults([
+      { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+      { boardIndex: 1, word: "crane", result: ["grey", "green", "grey", "grey", "grey"], boardStatus: "unsolved" },
+      { boardIndex: 2, word: "crane", result: ["grey", "grey", "green", "grey", "grey"], boardStatus: "unsolved" },
+      { boardIndex: 3, word: "crane", result: ["grey", "grey", "grey", "green", "grey"], boardStatus: "unsolved" },
+    ]);
+    boardStore.getState().boards.forEach((b) => {
+      expect(b.guesses).toHaveLength(1);
+    });
   });
 
-  it("117: currentInput is cleared after the result is applied", () => {
+  it("104: does not alter shared currentInput — animation gate (BoardGrid) is responsible", () => {
     init();
-    "CRANE".split("").forEach((l) => boardStore.getState().appendLetter(0, l));
-    boardStore
-      .getState()
-      .applyResult(0, "crane", ["grey", "green", "grey", "grey", "green"], "active");
-    expect(boardStore.getState().boards[0].currentInput).toBe("");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    "CRANE".split("").forEach((l: string) => state.appendLetter(l));
+    state.applyAllResults([
+      { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("CRANE");
   });
 
-  it("118: submitting flag is cleared after the result is applied", () => {
+  it("105: does not alter global submitting — animation gate (BoardGrid) is responsible", () => {
     init();
-    boardStore.getState().setSubmitting(0, true);
-    boardStore
-      .getState()
-      .applyResult(0, "crane", ["grey", "green", "grey", "grey", "green"], "active");
-    expect(boardStore.getState().boards[0].submitting).toBe(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    state.setSubmitting(true);
+    state.applyAllResults([
+      { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).submitting).toBe(true);
   });
 
-  it("119: board status stays active when boardStatus is 'active'", () => {
+  it("106: one board solved, others stay unsolved", () => {
     init();
-    boardStore
-      .getState()
-      .applyResult(0, "crane", ["grey", "grey", "grey", "grey", "grey"], "active");
-    expect(boardStore.getState().boards[0].status).toBe("active");
-  });
-
-  it("120: board transitions to solved when boardStatus is 'solved'", () => {
-    init();
-    boardStore
-      .getState()
-      .applyResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyAllResults([
+      { boardIndex: 0, word: "apple", result: ["green", "green", "green", "green", "green"], boardStatus: "solved" },
+      { boardIndex: 1, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+      { boardIndex: 2, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+      { boardIndex: 3, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+    ]);
     expect(boardStore.getState().boards[0].status).toBe("solved");
+    expect(boardStore.getState().boards[1].status).toBe("unsolved");
+    expect(boardStore.getState().boards[2].status).toBe("unsolved");
+    expect(boardStore.getState().boards[3].status).toBe("unsolved");
   });
 
-  it("121: board transitions to failed when boardStatus is 'failed'", () => {
+  it("107: multiple boards solved simultaneously", () => {
     init();
-    boardStore
-      .getState()
-      .applyResult(0, "crane", ["grey", "grey", "grey", "grey", "grey"], "failed");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyAllResults([
+      { boardIndex: 0, word: "apple", result: ["green", "green", "green", "green", "green"], boardStatus: "solved" },
+      { boardIndex: 1, word: "grape", result: ["green", "green", "green", "green", "green"], boardStatus: "solved" },
+    ]);
+    expect(boardStore.getState().boards[0].status).toBe("solved");
+    expect(boardStore.getState().boards[1].status).toBe("solved");
+  });
+
+  it("108: board transitions to failed", () => {
+    init();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyAllResults([
+      { boardIndex: 0, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "failed" },
+      { boardIndex: 1, word: "crane", result: ["grey", "grey", "grey", "grey", "grey"], boardStatus: "unsolved" },
+    ]);
     expect(boardStore.getState().boards[0].status).toBe("failed");
+    expect(boardStore.getState().boards[1].status).toBe("unsolved");
   });
 });
 
-// Tests #122–124: how the store responds to a not_a_word rejection
-// The handler clears submitting and leaves currentInput intact; no attempt is consumed.
+// Tests #109–111: how the store responds to a not_a_word rejection.
+// The not_a_word handler clears submitting only; currentInput is preserved so the player can correct and resubmit.
+// No attempt is consumed on any board.
 
 describe("guess_result — not_a_word error", () => {
-  it("122: currentInput is preserved after a not_a_word rejection", () => {
+  it("109: shared currentInput preserved", () => {
     init();
-    "CRANE".split("").forEach((l) => boardStore.getState().appendLetter(0, l));
-    boardStore.getState().setSubmitting(0, true);
-    // Simulate not_a_word handler: only clear the submitting flag
-    boardStore.getState().setSubmitting(0, false);
-    expect(boardStore.getState().boards[0].currentInput).toBe("CRANE");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    "CRANE".split("").forEach((l: string) => state.appendLetter(l));
+    state.setSubmitting(true);
+    // not_a_word handler: clear submitting only, leave currentInput intact
+    state.setSubmitting(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).currentInput).toBe("CRANE");
   });
 
-  it("123: attemptCount is not incremented after a not_a_word rejection", () => {
+  it("110: no board attempt counts incremented", () => {
     init();
-    "CRANE".split("").forEach((l) => boardStore.getState().appendLetter(0, l));
-    boardStore.getState().setSubmitting(0, true);
-    boardStore.getState().setSubmitting(0, false);
-    expect(boardStore.getState().boards[0].attemptCount).toBe(0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    "CRANE".split("").forEach((l: string) => state.appendLetter(l));
+    state.setSubmitting(true);
+    state.setSubmitting(false);
+    boardStore.getState().boards.forEach((b) => {
+      expect(b.guesses).toHaveLength(0);
+    });
   });
 
-  it("124: submitting flag is cleared after a not_a_word rejection", () => {
+  it("111: global submitting cleared", () => {
     init();
-    boardStore.getState().setSubmitting(0, true);
-    boardStore.getState().setSubmitting(0, false);
-    expect(boardStore.getState().boards[0].submitting).toBe(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const state = boardStore.getState() as any;
+    state.setSubmitting(true);
+    state.setSubmitting(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((boardStore.getState() as any).submitting).toBe(false);
   });
 });
 
-// Tests #125–126: how the store responds to a round_expired error
-// All non-terminal boards are locked immediately.
+// Tests #112–113: how the store responds to a round_expired error.
+// All non-terminal boards transition to locked immediately.
 
 describe("guess_result — round_expired error", () => {
-  it("125: all non-terminal boards transition to locked", () => {
+  it("112: all unsolved boards locked", () => {
     init();
     boardStore.getState().lockAllBoards();
-    const { boards } = boardStore.getState();
-    expect(boards[0].status).toBe("locked");
-    expect(boards[1].status).toBe("locked");
-    expect(boards[2].status).toBe("locked");
-    expect(boards[3].status).toBe("locked");
+    boardStore.getState().boards.forEach((b) => {
+      expect(b.status).toBe("locked");
+    });
   });
 
-  it("126: a solved board is unaffected by the round_expired lock", () => {
+  it("113: solved board unaffected", () => {
     init();
-    boardStore
-      .getState()
-      .applyResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (boardStore.getState() as any).applyBoardResult(0, "apple", ["green", "green", "green", "green", "green"], "solved");
     boardStore.getState().lockAllBoards();
     expect(boardStore.getState().boards[0].status).toBe("solved");
   });

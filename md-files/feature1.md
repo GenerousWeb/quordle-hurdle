@@ -43,50 +43,46 @@ Each board is in exactly one of the following states at any time:
 
 Only one board can be in the Active state at any time. Solved and Failed boards do not transition back to Active or Idle.
 
-### Focus and navigation
+### Input model — shared simultaneous input
 
-- When a round starts, focus defaults to Board 1 (top-left)
-- A player can shift focus to any Idle board by clicking it
-- When a board is solved, focus automatically shifts to the next unsolved board in reading order (left-to-right, top-to-bottom)
-- Solved, Failed, and Locked boards cannot receive focus
-- The currently active board is visually distinguished from idle boards by a highlighted border
-
-### Input
+All four boards receive the same typed input simultaneously. There is no concept of a single "active" board that must be focused — every guess the player types is broadcast to all boards that are still unsolved at the moment of submission. Each board independently evaluates the guess against its own target word.
 
 - All input is captured via physical keyboard only (no on-screen keyboard for MVP)
-- Letter keys (A–Z) append a character to the current row of the active board, up to 5 characters
-- Backspace removes the last typed character from the current row
-- Enter submits the current row as a guess
-- Input is only accepted when a board is in the Active state
-- If a player has solved all four boards, all keyboard input is blocked for the remainder of the round
-- A guess cannot be submitted if the current row has fewer than 5 characters
+- Letter keys (A–Z) append a character to the shared input row, displayed identically across all unsolved boards, up to 5 characters
+- Backspace removes the last typed character from the shared input row, reflected across all unsolved boards
+- Enter submits the shared guess simultaneously to all unsolved boards
+- If all boards have reached a terminal state (Solved, Failed, or Locked), all keyboard input is blocked
+- A guess cannot be submitted if the shared input row has fewer than 5 characters
 
 ### Guess submission and feedback
 
-- On Enter, the current 5-letter guess is submitted for evaluation against the active board's target word
-- The guess must be a valid word in the word list; invalid words are rejected and the row is not consumed
-- Each submitted guess occupies one row of the board's tile grid
-- After evaluation, every tile in that row is revealed with a colour result:
-  - **Green** — correct letter in the correct position
-  - **Yellow** — letter exists in the word but is in the wrong position
-  - **Grey** — letter is not in the word
-- Tiles are revealed sequentially left-to-right with a card-flip animation; the next guess row becomes available only after all tiles have revealed
-- Only one guess may be in-flight per board at a time — submitting is blocked until the current reveal animation completes
+- On Enter, the current 5-letter guess is submitted for evaluation against every unsolved board simultaneously
+- The guess must be a valid word in the word list; if invalid, the shared row shakes across all unsolved boards and no attempt is consumed on any board
+- Each submitted guess occupies one row on each unsolved board's tile grid
+- After evaluation, every tile in that row is revealed on each board independently with its own colour result:
+  - **Green** — correct letter in the correct position for that board's target word
+  - **Yellow** — letter exists in that board's target word but in the wrong position
+  - **Grey** — letter is not in that board's target word
+- The same guess will produce different colour results on different boards — each board evaluates independently against its own target
+- Tiles are revealed sequentially left-to-right with a card-flip animation per board; the next shared input row becomes available only after all tile animations across all unsolved boards have completed
+- Only one shared guess may be in-flight at a time — submitting is blocked until all unsolved boards have received their results and animations have completed
 
 ### Solving a board
 
-- A board is solved when all 5 tiles in a submitted row are Green
-- On solve, the board transitions to the Solved state immediately
-- A distinct visual highlight (border or glow) is applied to the solved board
-- Focus shifts automatically to the next unsolved board
+- A board is solved when all 5 tiles in a submitted row are Green for that board's target word
+- On solve, that board transitions to the Solved state and is visually highlighted with a distinct completion border or glow
+- The solved board no longer receives subsequent shared guesses — it is excluded from all future submissions in the same round
+- All remaining unsolved boards continue receiving the shared input and guesses as normal
+- No focus shift occurs — the player continues typing into the shared input row which applies to all remaining unsolved boards
 
 ### Failing a board
 
-- A board fails when the 9th guess is submitted and does not solve the word
-- On failure, the board transitions to the Failed state
-- The target word is displayed in a reveal row beneath the tile grid
-- The board tiles adopt a muted visual style to signal it is no longer active
-- No further guesses can be entered on a failed board
+- A board fails when the 9th shared guess is submitted and does not solve that board's word
+- On failure, that board transitions to the Failed state independently of all other boards
+- The target word is displayed in a reveal row beneath that board's tile grid
+- That board's tiles adopt a muted visual style to signal it is no longer in play
+- All remaining unsolved boards continue receiving guesses normally
+- A board can fail while other boards are still being actively guessed — each board's attempt count is tracked independently
 
 ### Round end — timer expiry
 
@@ -126,12 +122,14 @@ Only one board can be in the Active state at any time. Solved and Failed boards 
 ## Edge cases
 
 - **Player solves all four boards before the timer expires** — all input is blocked; the player waits for the round to end naturally or for all other players to finish
-- **Player uses all 9 attempts on a board without solving it** — that board enters the Failed state; the player continues on remaining boards unaffected
-- **Player submits a guess that is not in the word list** — the guess is rejected, the row shakes or flashes to indicate the error, and the attempt count for that board is not incremented
-- **Round timer expires mid-animation** — the current tile reveal animation completes but the guess result does not count; the board locks immediately after the animation
-- **Player switches focus to a different board and then the timer expires** — all remaining boards lock regardless of which board was active
+- **A board fails while others are still unsolved** — the failed board exits the shared guess pool silently; subsequent shared guesses go to the remaining unsolved boards only; the player is not notified to do anything differently
+- **Player submits a guess that is not in the word list** — the shared row shakes identically on all currently unsolved boards; no attempt is consumed on any board; the player corrects and retries
+- **One board solves on a guess, others do not** — the solving board highlights with a completion glow; the same guess row result is shown on all boards independently; subsequent input continues for the remaining unsolved boards only
+- **Multiple boards solve on the same guess** — each solving board highlights simultaneously; the round continues for any remaining unsolved boards
+- **The final unsolved board solves or fails** — all boards are now in terminal states; input is blocked; the round ends or waits for the timer
+- **Round timer expires mid-animation** — the current tile reveal animation completes but the guess result does not count on any board; all non-terminal boards lock immediately after the animation
 - **All four boards reach a terminal state (any mix of Solved and Failed) before the timer expires** — the round ends early; this is handled by the round lifecycle, not the board feature itself
-- **Player joins with less than 5 seconds remaining** — they receive blank boards and the remaining time; they may not have enough time to complete a full guess, which is expected behaviour
+- **Player joins with less than 5 seconds remaining** — they receive blank boards and the remaining time; the shared input model applies immediately with no prior guess history shown
 
 ---
 
@@ -181,18 +179,18 @@ Emitted by the client when the player presses Enter on a completed 5-letter row.
 {
   "gameId": "xK9mP2qR",
   "roundNumber": 2,
-  "boardIndex": 1,
   "guess": "crane"
 }
 ```
 
 > `playerId` is **not** in the payload. The server resolves it from the authenticated socket session to prevent spoofing.
+> There is no `boardIndex` — the guess is evaluated against every unsolved board simultaneously. The server determines which boards are unsolved from Redis state.
 
 **Client-side guards before emitting:**
 
-- Guess is exactly 5 characters (enforced by input handling)
-- Board is in Active state (not Solved, Failed, or Locked)
-- No guess currently in-flight on this board (a `submitting` flag is set to `true` on emit; blocks re-submission until `guess_result` is received)
+- Shared guess is exactly 5 characters (enforced by input handling)
+- At least one board is still unsolved (not all in Solved, Failed, or Locked state)
+- No guess currently in-flight (a global `submitting` flag is set to `true` on emit; blocks re-submission until all boards have received their `guess_result`)
 - Round has not already expired client-side (belt-and-braces; server enforces authoritatively)
 
 ---
@@ -207,11 +205,11 @@ The server runs checks in order before the matching engine is called. Any failur
 | 2 | Game status is `active` | `game_not_active` |
 | 3 | `roundNumber` matches server's current round | `stale_round` |
 | 4 | Round deadline is still in the future (Redis TTL check) | `round_expired` |
-| 5 | `boardIndex` is 0–3 | `invalid_board` |
-| 6 | This player has not already Solved or Failed this board | `board_not_active` |
-| 7 | This player has not exhausted `maxAttempts` (9) on this board | `max_attempts_reached` |
-| 8 | Guess is exactly 5 alphabetic characters | `invalid_format` |
-| 9 | Guess exists in the valid-word Set (O(1) lookup) | `not_a_word` |
+| 5 | At least one board is still unsolved for this player | `all_boards_terminal` |
+| 6 | Guess is exactly 5 alphabetic characters | `invalid_format` |
+| 7 | Guess exists in the valid-word Set (O(1) lookup) | `not_a_word` |
+
+> The old per-board checks (`invalid_board`, `board_not_active`, `max_attempts_reached`) are no longer in the shared validation chain. Instead, the server iterates over each board's state in Redis and evaluates only the unsolved ones — boards already in Solved or Failed state are silently skipped.
 
 ---
 
@@ -297,25 +295,44 @@ The guess record is also appended to PostgreSQL asynchronously (non-blocking —
 
 **`guess_result` — emitted to the guessing player's socket only:**
 
+The response contains one entry per board, for every board the guess was evaluated against. Boards already in a terminal state at time of submission are omitted.
+
 ```json
 {
-  "boardIndex": 1,
   "guess": "crane",
-  "result": ["grey", "green", "grey", "grey", "green"],
-  "scoreDelta": 8,
-  "boardStatus": "active",
-  "attemptNumber": 3
+  "totalScoreDelta": 14,
+  "attemptNumber": 3,
+  "boards": [
+    {
+      "boardIndex": 0,
+      "result": ["grey", "green", "grey", "grey", "green"],
+      "scoreDelta": 8,
+      "boardStatus": "active"
+    },
+    {
+      "boardIndex": 1,
+      "result": ["green", "green", "green", "green", "green"],
+      "scoreDelta": 25,
+      "boardStatus": "solved"
+    },
+    {
+      "boardIndex": 2,
+      "result": ["grey", "grey", "grey", "grey", "grey"],
+      "scoreDelta": 0,
+      "boardStatus": "active"
+    }
+  ]
 }
 ```
 
-> `boardStatus` is one of `"active"`, `"solved"`, or `"failed"`. The client uses this to drive board state transitions without re-deriving outcome from the result array.  
-> `attemptNumber` confirms which row to render the result on — a guard against client/server row desync.
+> `boardStatus` per board is one of `"active"`, `"solved"`, or `"failed"`. The client uses this to drive independent state transitions on each board.
+> `attemptNumber` is shared — it is the same row number across all boards, since every board receives the same guess simultaneously.
+> `totalScoreDelta` is the sum of all per-board `scoreDelta` values for this guess, applied to the player's running total in one Redis write.
 
 **Error shape (validation failure):**
 
 ```json
 {
-  "boardIndex": 1,
   "guess": "crane",
   "error": "not_a_word"
 }
@@ -325,11 +342,10 @@ The guess record is also appended to PostgreSQL asynchronously (non-blocking —
 
 | Code | Client behaviour |
 |------|-----------------|
-| `not_a_word` | Shake animation on current row; row not consumed; attempt count unchanged |
-| `round_expired` | Lock all boards immediately regardless of local timer state |
+| `not_a_word` | Shared shake animation on current input row across all unsolved boards; row not consumed; no attempt incremented on any board |
+| `round_expired` | Lock all non-terminal boards immediately |
 | `stale_round` | Trigger full game state refresh from server |
-| `board_not_active` | Refresh board state from server |
-| `max_attempts_reached` | Should be caught client-side before emit; log and ignore if received |
+| `all_boards_terminal` | Should be caught client-side before emit; block input and ignore if received |
 
 **`leaderboard_update` — broadcast to all clients in the game room:**
 
@@ -347,14 +363,15 @@ The guess record is also appended to PostgreSQL asynchronously (non-blocking —
 
 ### Client handling on `guess_result`
 
-1. Write the result array to the board's guess history at `attemptNumber - 1` in the Zustand store
-2. Clear the `submitting` flag (unlocks the board for the next guess)
-3. Trigger the tile flip animation left-to-right (~120ms stagger per tile; ~600ms total for 5 tiles)
-4. After animation completes, advance the cursor to the next empty row
-5. If `boardStatus === "solved"` → transition board to Solved state; shift focus to next unsolved board
-6. If `boardStatus === "failed"` → transition board to Failed state; reveal target word row
+1. For each entry in `boards[]`, write the result array to that board's guess history at `attemptNumber - 1` in the Zustand store
+2. Clear the global `submitting` flag only after all board results have been written
+3. Trigger tile flip animations simultaneously across all boards that received a result (~120ms stagger per tile per board; all boards animate in parallel)
+4. After all animations across all boards have completed, clear the shared `currentInput` and make the next shared input row available
+5. For each board where `boardStatus === "solved"` → transition that board to Solved state and apply the completion highlight
+6. For each board where `boardStatus === "failed"` → transition that board to Failed state and reveal its target word row
+7. Update the player's running score by `totalScoreDelta`
 
-> The animation completion gate (step 3–4) is intentional — it prevents the player typing into the next row before the current reveal finishes, which would cause a confusing visual state.
+> The animation completion gate (step 3–4) waits for all boards — not just one. This keeps the shared input row in sync with all boards simultaneously.
 
 ---
 
@@ -365,29 +382,41 @@ Client                        Server                      Redis / PostgreSQL
   |                               |                               |
   |-- submit_guess -----------→   |                               |
   |   {gameId, roundNumber,       |                               |
-  |    boardIndex, guess}         |                               |
+  |    guess}                     |                               |
   |                               |-- GET deadline TTL --------→  |
   |                               |← still valid --------------   |
-  |                               |-- HGET attempt count ------→  |
-  |                               |← count = 2 ---------------   |
+  |                               |-- HGET board states (all) →   |
+  |                               |← boards 0,1,2 unsolved ----   |
+  |                               |    board 3 already solved      |
   |                               |                               |
   |                               | [validate word in Set: O(1)]  |
-  |                               | [match(guess, target)]        |
-  |                               | [calculate scoreDelta]        |
+  |                               | [match(guess, target_0)]      |
+  |                               | [match(guess, target_1)]      |
+  |                               | [match(guess, target_2)]      |
+  |                               | [calculate scoreDelta each]   |
   |                               |                               |
-  |                               |-- HINCRBY attempts --------→  |
+  |                               |-- HINCRBY attempts board 0 →  |
+  |                               |-- HINCRBY attempts board 1 →  |
+  |                               |-- HINCRBY attempts board 2 →  |
   |                               |-- ZINCRBY leaderboard -----→  |
   |                               |-- INSERT guess (async) ----→  |
   |                               |                               |
   |← guess_result  -----------    |                               |
-  |  {result[], scoreDelta,       |                               |
-  |   boardStatus, attemptNumber} |                               |
+  |  {guess, attemptNumber,       |                               |
+  |   totalScoreDelta,            |                               |
+  |   boards: [                   |                               |
+  |    {boardIndex, result[],     |                               |
+  |     scoreDelta, boardStatus}  |                               |
+  |    × unsolved boards only]}   |                               |
   |                               |                               |
   |  [all room clients] ←-------  leaderboard_update             |
   |                               |                               |
-  |  [animate tiles]              |                               |
-  |  [unlock board]               |                               |
-  |  [advance focus if solved]    |                               |
+  |  [animate all boards in       |                               |
+  |   parallel]                   |                               |
+  |  [transition solved/failed    |                               |
+  |   boards independently]       |                               |
+  |  [unlock shared input after   |                               |
+  |   all animations done]        |                               |
 ```
 
 ---
@@ -421,9 +450,10 @@ Four steps, each large enough to deliver a reviewable, testable capability. Step
 - No I/O, no side effects, takes two strings and returns an array of five colour strings
 
 **Board state model (client — Zustand store):**
-- Each of the four boards tracks: `status` (`active | idle | solved | failed | locked`), `targetWord`, `guesses` (array of submitted rows with result arrays), `currentInput` (letters typed in the current row), `attemptCount`, and `submitting` (in-flight guard flag)
+- Each of the four boards tracks: `status` (`unsolved | solved | failed | locked`), `targetWord`, and `guesses` (array of submitted rows with result arrays). There is no per-board `currentInput` or `submitting` flag — these are global, shared across all boards
+- A single global `currentInput: string` and `submitting: boolean` live at the store root, not on individual boards
 - Store initialises four blank boards on `round_started` and exposes state transitions for all board status changes
-- Transitions modelled: `active → solved`, `active → failed`, `active/idle → locked`
+- Transitions modelled: `unsolved → solved`, `unsolved → failed`, `unsolved → locked`
 
 **Done when:**
 - Matching engine returns correct results for all-green, all-grey, mixed, and duplicate-letter cases
@@ -446,26 +476,25 @@ Four steps, each large enough to deliver a reviewable, testable capability. Step
 - All board states render correctly from any valid store state; no hardcoded assumptions about which board is active
 
 **Keyboard input:**
-- Global `keydown` listener routes letter keys (A–Z) to `currentInput` of the active board, up to 5 characters
-- Backspace removes the last character; no-op if `currentInput` is empty
+- Global `keydown` listener routes letter keys (A–Z) to the shared `currentInput`, up to 5 characters
+- The shared `currentInput` is rendered identically in the current row of every unsolved board simultaneously
+- Backspace removes the last character from `currentInput`; no-op if empty
 - Enter is captured and fires submission (wired in Step 3); ignored if `currentInput` has fewer than 5 characters
-- All input is blocked when no board is `active`, or when all four boards are in terminal states
+- All input is blocked when all four boards are in terminal states (Solved, Failed, or Locked)
 
 **Focus and navigation:**
-- Round starts with Board 1 (`index 0`) set to `active`, all others `idle`
-- Clicking an `idle` board moves `active` to it; the previously active board becomes `idle`
-- Clicking a `solved`, `failed`, or `locked` board does nothing
-- When a board transitions to `solved`, focus auto-advances to the next `idle` board in reading order (0 → 1 → 2 → 3); if none remain, no board is active
+- There is no focus model — all unsolved boards receive input simultaneously; no board needs to be selected or clicked
+- Boards do not have an active/idle distinction; they are either unsolved (receiving input) or terminal (not receiving input)
+- No click-to-focus interaction is needed or implemented
 
 **Done when:**
-- Typing letters fills the active board's current row tile-by-tile, visible in the browser
-- Backspace removes characters correctly
-- Clicking boards shifts focus correctly, including after a solve
-- Terminal-state boards cannot receive focus or input
+- Typing letters fills the shared `currentInput` row tile-by-tile on every unsolved board simultaneously, visible in the browser
+- Backspace removes the last character from the shared row across all unsolved boards
+- Terminal boards (Solved, Failed, Locked) show their final state and do not update with new shared input
 - All board visual states render correctly driven from the store
 - Layout holds at mobile and desktop widths
 
-**Why here:** Getting UI and input right before adding the network layer means the full interactive surface can be tested locally with seeded store state, and bugs in input routing or focus logic are caught before they get tangled with async WebSocket behaviour.
+**Why here:** Getting the shared input rendering right before adding the network layer means the full interactive surface can be tested locally with seeded store state, and the simultaneous-broadcast behaviour is proven before async WebSocket complexity is added.
 
 ---
 
@@ -474,26 +503,27 @@ Four steps, each large enough to deliver a reviewable, testable capability. Step
 **Scope:** The complete round-trip from pressing Enter to the board updating with colour results. This wires the client to the server and closes the core gameplay loop.
 
 **Server-side (`submit_guess` handler):**
-- Runs the nine-step validation chain in order; emits an error and returns early on any failure (see Technical Design section for full chain and error codes)
-- Calls `match(guess, target)` for the given `boardIndex`, calculates `scoreDelta` including solve bonus and early-finish bonus
-- Writes to Redis: increments attempt count (`HINCRBY`), updates leaderboard sorted set (`ZINCRBY`)
+- Runs the seven-step validation chain in order; emits an error and returns early on any failure (see Technical Design section for full chain and error codes)
+- Reads all four board states from Redis; identifies which boards are still unsolved
+- Calls `match(guess, target)` independently for each unsolved board, calculates per-board `scoreDelta` and `boardStatus`
+- Writes to Redis: increments attempt count per unsolved board (`HINCRBY` × N), updates leaderboard sorted set once with `totalScoreDelta` (`ZINCRBY`)
 - Appends guess record to PostgreSQL asynchronously — does not block the response
-- Emits `guess_result` to the guessing player's socket only
+- Emits `guess_result` to the guessing player's socket only, containing results for all evaluated boards
 - Emits `leaderboard_update` to the full game room
 
 **Client-side (submission and result handling):**
-- On Enter with 5 characters and no guess in-flight: sets `submitting = true`, emits `submit_guess` with `{ gameId, roundNumber, boardIndex, guess }`
-- On `guess_result` (success): writes result to the board's `guesses` array at `attemptNumber - 1`, clears `currentInput` and `submitting`, transitions board to `solved` or `failed` if indicated by `boardStatus`; on `failed`, makes `targetWord` visible in the reveal row
-- On `guess_result` (error `not_a_word`): clears `submitting`, leaves `currentInput` intact, triggers a shake animation on the current row
+- On Enter with 5 characters and no guess in-flight: sets global `submitting = true`, emits `submit_guess` with `{ gameId, roundNumber, guess }` (no `boardIndex`)
+- On `guess_result` (success): for each board entry in `boards[]`, writes result to that board's `guesses` array at `attemptNumber - 1`; transitions each board to `solved` or `failed` per its `boardStatus`; clears `currentInput` and `submitting` after all board writes complete
+- On `guess_result` (error `not_a_word`): clears `submitting`, leaves `currentInput` intact, triggers shake animation on the shared row across all unsolved boards
 - On `guess_result` (error `round_expired`): transitions all non-terminal boards to `locked`
 - On `guess_result` (error `stale_round`): requests a full game state refresh from the server
 
 **Done when:**
-- Submitting a valid in-vocabulary word returns the correct colour result and updates the board
-- Submitting a word not in the word list shakes the row, does not consume an attempt, and leaves the board ready for the next guess
-- Board transitions to `solved` or `failed` correctly based on `boardStatus` in the response
-- `submitting` flag blocks double-submission until the server responds
-- All nine error codes return the correct error and leave the board in a valid, non-stuck state
+- Submitting a valid word returns independent colour results for all unsolved boards in one response
+- The same guess correctly solves one board while leaving others in play
+- A board that reaches 9 attempts fails independently; others continue receiving guesses
+- `submitting` flag blocks double-submission until all boards have received their results
+- Shake animation on invalid word fires across all unsolved boards simultaneously
 - Server handler can be tested end-to-end with a Socket.io test client against a seeded game in Redis without any browser UI
 
 **Why here:** Depends on the matching engine (Step 1) being correct and the board UI and input handling (Step 2) being in place. This step makes the feature playable end-to-end for the first time.
@@ -552,24 +582,24 @@ Legend:
 | 2 | all grey — no shared letters | `"crane"` / `"motto"` | `["grey","grey","grey","grey","grey"]` | Zero overlap returns all greys |
 | 3 | all yellow — all letters present, none in position | `"abcde"` / `"eabcd"` | `["yellow","yellow","yellow","yellow","yellow"]` | Full anagram produces all yellows |
 | 4 | mixed — green, yellow, grey in same row | `"crane"` / `"grove"` | `["grey","green","grey","grey","green"]` | Standard mixed result is correct |
-| 5 | single green at position 0 | `"grant"` / `"globe"` | `["green","grey","grey","grey","grey"]` | First-position green isolated correctly |
-| 6 | single green at position 4 | `"abcde"` / `"xxxde"` — use real words | varies | Last-position green isolated correctly |
-| 7 | duplicate in guess, once in target — first occurrence yellow | `"speed"` / `"depot"` | `["grey","grey","yellow","grey","grey"]` | Second `e` in guess is grey; target only has one `e` |
-| 8 | duplicate in guess, once in target — first is green | `"creep"` / `"score"` | verify only one `e` is yellow/green, other is grey | Green consumes target letter; excess is grey |
-| 9 | duplicate in target, once in guess — letter matches first available | `"crane"` / `"error"` | `r` in guess is yellow (one unconsumed `r` in target) | Single guess letter finds unconsumed target duplicate |
+| 5 | single green at position 0 only | `"grant"` / `"globe"` | `["green","grey","grey","grey","grey"]` | First-position green isolated correctly |
+| 6 | single green at position 4 only | use real words with one last-letter match | `["grey","grey","grey","grey","green"]` | Last-position green isolated correctly |
+| 7 | duplicate in guess, once in target — excess is grey | `"speed"` / `"depot"` | second `e` in guess is grey | Second occurrence in guess with one target match is grey |
+| 8 | duplicate in guess, once in target — first is green | `"creep"` / `"score"` | only one `e` is yellow/green, other is grey | Green consumes target letter; excess is grey |
+| 9 | duplicate in target, once in guess | `"crane"` / `"error"` | `r` in guess is yellow | Single guess letter finds unconsumed target duplicate |
 | 10 | duplicate in both guess and target | `"speed"` / `"eased"` | each `e` accounted for without over-counting | Both sides have multiple — no over-attribution |
-| 11 | green takes priority — same letter green at one pos, grey elsewhere | `"abbey"` / `"kebab"` | position with exact match is green; excess `b` in guess is grey | Green position consumes target letter before pass 2 |
-| 12 | letter appears 3× in guess, once in target | `"eerie"` / `"stone"` | only one `e` result is yellow or green; rest are grey | Three-occurrence duplicate handled correctly |
+| 11 | green takes priority over yellow for same letter | `"abbey"` / `"kebab"` | exact match position is green; excess `b` is grey | Green position consumes target letter before pass 2 |
+| 12 | letter appears 3× in guess, once in target | `"eerie"` / `"stone"` | only one `e` result is non-grey | Three-occurrence duplicate handled correctly |
 | 13 | letter appears once in guess, 3× in target | `"crane"` / `"eerie"` | at most one non-grey result for `e` | Excess target letters don't produce extra yellows |
-| 14 | no letters in common — all unique characters | `"chump"` / `"bland"` | `["grey","grey","grey","grey","grey"]` | Disjoint alphabets produce all grey |
-| 15 | correct word in wrong order at every position | `"steal"` / `"tales"` | all yellow (no position matches) | Pure anagram with no positional overlap |
-| 16 | one letter matches green, same letter also yellow elsewhere | `"llama"` / `"algal"` | only one `l` is non-grey based on consumption order | Complex duplicate — green consumed, yellow from remaining |
-| 17 | guess has letter not in target at all positions | `"zzzzz"` / `"crane"` | `["grey","grey","grey","grey","grey"]` | Letter absent from target is always grey |
-| 18 | target and guess share only last letter, in position | `"abcde"` / `"vwxye"` — use real words | `["grey","grey","grey","grey","green"]` | Boundary: only final position matches |
-| 19 | target and guess share only first letter, not in position | `"crane"` / `"achoo"` | `c` at position 0 in guess — not in target at pos 0; check yellow | Leading letter in wrong position is yellow |
+| 14 | no letters in common | `"chump"` / `"bland"` | all grey | Disjoint alphabets produce all grey |
+| 15 | pure anagram — all letters present, none in position | `"steal"` / `"tales"` | all yellow | No positional overlap, all letters match |
+| 16 | complex duplicate — green then yellow from same letter | `"llama"` / `"algal"` | one `l` green, one `l` yellow, remainder grey | Green consumed first, yellow from remaining |
+| 17 | letter not in target at any position | `"zzzzz"` / `"crane"` | all grey | Letter absent from target is always grey |
+| 18 | only last letter matches in position | use real words | `["grey","grey","grey","grey","green"]` | Boundary: final position only |
+| 19 | only first letter present but wrong position | `"crane"` / `"achoo"` | `c` is yellow | Leading letter in wrong position is yellow |
 | 20 | result array is always length 5 | any valid inputs | `result.length === 5` | Output shape contract never broken |
-| 21 | return type is `TileResult[]`, not `string[]` | TypeScript compile check | `tsc --noEmit` passes | Type contract enforced at compile time |
-| 22 | function is pure — same inputs always same output | call twice with identical args | results are deeply equal | No hidden state or randomness |
+| 21 | return type is `TileResult[]` at compile time | TypeScript compile check | `tsc --noEmit` passes | Type contract enforced |
+| 22 | function is pure — identical inputs identical output | call twice with same args | deeply equal results | No hidden state or randomness |
 
 ---
 
@@ -584,59 +614,51 @@ const WORDS = ["apple", "grape", "stone", "light"]
 // Call store.initBoards(WORDS) in beforeEach where needed
 ```
 
+The store now models `currentInput` and `submitting` as global shared fields, not per-board.
+
 | # | Test name | Action(s) | Expected state | What it proves |
 |---|-----------|-----------|----------------|----------------|
-| 23 | `initBoards` — board 0 is active | `initBoards(WORDS)` | `boards[0].status === "active"` | Initial focus on first board |
-| 24 | `initBoards` — boards 1–3 are idle | `initBoards(WORDS)` | `boards[1..3].status === "idle"` | Non-first boards start idle |
-| 25 | `initBoards` — target words set correctly | `initBoards(WORDS)` | each `board.targetWord === WORDS[i]` | Words mapped to correct board indexes |
-| 26 | `initBoards` — all inputs are empty | `initBoards(WORDS)` | all `currentInput === ""` and `guesses === []` | Clean slate on round start |
-| 27 | `initBoards` — resets previous round state | `initBoards`, submit guess, `initBoards` again | board 0 has empty `guesses` and `attemptCount === 0` | Second round starts fresh |
-| 28 | `appendLetter` — appends to active board | `appendLetter(0, "C")` | `boards[0].currentInput === "C"` | Letter routes to active board |
-| 29 | `appendLetter` — ignored on idle board | `appendLetter(1, "C")` | `boards[1].currentInput === ""` | Idle board rejects input |
-| 30 | `appendLetter` — ignored on solved board | solve board 0, `appendLetter(0, "C")` | `boards[0].currentInput === ""` | Terminal board rejects input |
-| 31 | `appendLetter` — stops at 5 characters | `appendLetter(0, "C")` × 6 | `boards[0].currentInput.length === 5` | Input cap enforced |
-| 32 | `appendLetter` — builds word correctly | append `C`, `R`, `A`, `N`, `E` to board 0 | `boards[0].currentInput === "CRANE"` | Sequential appends produce correct string |
-| 33 | `deleteLetter` — removes last character | append 3 letters, `deleteLetter(0)` | `currentInput.length === 2` | Backspace removes one character |
-| 34 | `deleteLetter` — no-op on empty input | `deleteLetter(0)` with empty `currentInput` | `currentInput === ""` | No error on empty backspace |
-| 35 | `deleteLetter` — no-op on idle board | `deleteLetter(1)` | `boards[1].currentInput === ""` | Idle board ignores delete |
-| 36 | `setSubmitting` — sets flag true | `setSubmitting(0, true)` | `boards[0].submitting === true` | In-flight flag set correctly |
-| 37 | `setSubmitting` — sets flag false | set true then `setSubmitting(0, false)` | `boards[0].submitting === false` | In-flight flag cleared correctly |
-| 38 | `setSubmitting` — no-op on idle board | `setSubmitting(1, true)` | `boards[1].submitting === false` | Only active board can be submitting |
-| 39 | `applyResult` — guess appended to history | `applyResult(0, "crane", [...], "active")` | `boards[0].guesses.length === 1` | Guess recorded in history |
-| 40 | `applyResult` — correct word and result stored | `applyResult(0, "crane", ["grey","green","grey","grey","green"], "active")` | `guesses[0] === { word: "crane", result: [...] }` | Exact values stored correctly |
-| 41 | `applyResult` — attemptCount increments | `applyResult` called 3 times | `boards[0].attemptCount === 3` | Attempt counter advances each guess |
-| 42 | `applyResult` — currentInput cleared | append letters then `applyResult` | `boards[0].currentInput === ""` | Row cleared after submission |
-| 43 | `applyResult` — submitting cleared | set submitting true then `applyResult` | `boards[0].submitting === false` | In-flight flag released on result |
-| 44 | `applyResult` — status stays active | `applyResult(0, ..., "active")` | `boards[0].status === "active"` | Board stays active on non-solve result |
-| 45 | `applyResult` — status transitions to solved | `applyResult(0, ..., "solved")` | `boards[0].status === "solved"` | Solve transition correct |
-| 46 | `applyResult` — status transitions to failed | `applyResult(0, ..., "failed")` | `boards[0].status === "failed"` | Fail transition correct |
-| 47 | `applyResult` — other boards unaffected | `applyResult(0, ...)` | `boards[1..3]` unchanged | Board independence enforced |
-| 48 | `lockAllBoards` — active board locked | `lockAllBoards()` | `boards[0].status === "locked"` | Active board locks on timer expiry |
-| 49 | `lockAllBoards` — idle boards locked | `lockAllBoards()` | `boards[1..3].status === "locked"` | All idle boards lock |
-| 50 | `lockAllBoards` — solved board unchanged | solve board 0, `lockAllBoards()` | `boards[0].status === "solved"` | Solved board not overwritten |
-| 51 | `lockAllBoards` — failed board unchanged | fail board 0, `lockAllBoards()` | `boards[0].status === "failed"` | Failed board not overwritten |
-| 52 | `lockAllBoards` — currentInput cleared | append letters then `lockAllBoards()` | `boards[0].currentInput === ""` | Partial input wiped on lock |
-| 53 | `setFocus` — moves focus to idle board | `setFocus(2)` | `boards[2].status === "active"`, `boards[0].status === "idle"` | Focus shift correct |
-| 54 | `setFocus` — previous board becomes idle | focus board 0, `setFocus(1)` | `boards[0].status === "idle"` | Previous active demoted |
-| 55 | `setFocus` — no-op on solved board | solve board 1, `setFocus(1)` | `boards[1].status === "solved"` | Cannot focus solved board |
-| 56 | `setFocus` — no-op on failed board | fail board 1, `setFocus(1)` | `boards[1].status === "failed"` | Cannot focus failed board |
-| 57 | `setFocus` — no-op on locked board | lock all, `setFocus(0)` | `boards[0].status === "locked"` | Cannot focus locked board |
-| 58 | `advanceFocus` — moves to next idle board | solve board 0, `advanceFocus(0)` | `boards[1].status === "active"` | Auto-advance to board 1 |
-| 59 | `advanceFocus` — skips solved boards | solve boards 0 and 1, `advanceFocus(0)` | `boards[2].status === "active"` | Skips already-terminal boards |
-| 60 | `advanceFocus` — no active board when all terminal | solve all 4 boards, `advanceFocus(3)` | no board is `"active"` | All terminal → no focus |
-| 61 | `advanceFocus` — does not wrap around | solve board 3, `advanceFocus(3)` | boards 0–2 status unchanged (already idle) | Does not cycle back to board 0 |
-| 62 | `activeBoard` selector — returns active board | `initBoards`, check selector | returns `boards[0]` object | Selector returns correct reference |
-| 63 | `activeBoard` selector — returns null when all terminal | lock all boards | selector returns `null` | Null when no active board |
-| 64 | `activeBoardIndex` selector — returns correct index | `setFocus(2)` | returns `2` | Index matches focused board |
-| 65 | `activeBoardIndex` selector — returns null when none active | lock all | returns `null` | Null index when no active board |
-| 66 | `allTerminal` selector — false during active round | `initBoards` | returns `false` | Not terminal while boards are active/idle |
-| 67 | `allTerminal` selector — true when all solved | solve all 4 | returns `true` | All solved = terminal |
-| 68 | `allTerminal` selector — true on mix of solved/failed/locked | mix of all three terminal states | returns `true` | Any terminal combination qualifies |
-| 69 | `allTerminal` selector — false when one board still idle | lock 3 boards, leave 1 idle | returns `false` | One non-terminal board = not all terminal |
+| 23 | `initBoards` — all boards set to unsolved | `initBoards(WORDS)` | all `boards[].status === "unsolved"` | All boards start unsolved |
+| 24 | `initBoards` — target words set correctly | `initBoards(WORDS)` | each `board.targetWord === WORDS[i]` | Words mapped to correct board indexes |
+| 25 | `initBoards` — global currentInput is empty | `initBoards(WORDS)` | `store.currentInput === ""` | Shared input cleared on round start |
+| 26 | `initBoards` — all guess arrays are empty | `initBoards(WORDS)` | all `board.guesses === []` | Clean slate on round start |
+| 27 | `initBoards` — resets previous round state | `initBoards`, apply results, `initBoards` again | all boards blank, `currentInput === ""` | Second round starts completely fresh |
+| 28 | `appendLetter` — appends to shared currentInput | `appendLetter("C")` | `store.currentInput === "C"` | Letter goes to shared input |
+| 29 | `appendLetter` — stops at 5 characters | `appendLetter` × 6 | `store.currentInput.length === 5` | Shared input cap enforced |
+| 30 | `appendLetter` — blocked when all boards terminal | all boards solved, `appendLetter("C")` | `store.currentInput === ""` | No input when all boards done |
+| 31 | `appendLetter` — builds word correctly | append `C`, `R`, `A`, `N`, `E` | `store.currentInput === "CRANE"` | Sequential appends produce correct string |
+| 32 | `deleteLetter` — removes last character from shared input | append 3 letters, `deleteLetter()` | `store.currentInput.length === 2` | Backspace on shared input works |
+| 33 | `deleteLetter` — no-op on empty shared input | `deleteLetter()` on empty | `store.currentInput === ""` | Empty backspace harmless |
+| 34 | `deleteLetter` — blocked when all boards terminal | all solved, `deleteLetter()` | `store.currentInput === ""` | No delete when all boards done |
+| 35 | `setSubmitting` — sets global flag true | `setSubmitting(true)` | `store.submitting === true` | Global in-flight flag set |
+| 36 | `setSubmitting` — sets global flag false | `setSubmitting(false)` | `store.submitting === false` | Global in-flight flag cleared |
+| 37 | `applyBoardResult` — guess appended to correct board | `applyBoardResult(0, "crane", [...], "unsolved")` | `boards[0].guesses.length === 1` | Guess recorded on correct board |
+| 38 | `applyBoardResult` — correct word and result stored | `applyBoardResult(0, "crane", ["grey","green","grey","grey","green"], "unsolved")` | `guesses[0] === { word: "crane", result: [...] }` | Exact values stored |
+| 39 | `applyBoardResult` — status stays unsolved | `applyBoardResult(0, ..., "unsolved")` | `boards[0].status === "unsolved"` | Board stays in play on non-solve |
+| 40 | `applyBoardResult` — status transitions to solved | `applyBoardResult(0, ..., "solved")` | `boards[0].status === "solved"` | Solve transition correct |
+| 41 | `applyBoardResult` — status transitions to failed | `applyBoardResult(0, ..., "failed")` | `boards[0].status === "failed"` | Fail transition correct |
+| 42 | `applyBoardResult` — other boards unaffected | `applyBoardResult(0, ...)` | `boards[1..3]` unchanged | Board independence enforced |
+| 43 | `applyAllResults` — applies results to multiple boards at once | `applyAllResults([{boardIndex:0,...},{boardIndex:2,...}])` | boards 0 and 2 updated; boards 1 and 3 unchanged | Multi-board simultaneous result applied |
+| 44 | `applyAllResults` — clears shared currentInput | `applyAllResults(...)` | `store.currentInput === ""` | Shared row cleared after all boards updated |
+| 45 | `applyAllResults` — clears global submitting | `applyAllResults(...)` | `store.submitting === false` | Global flag released after all results |
+| 46 | `applyAllResults` — one board solves, others stay unsolved | one board with `"solved"` status in results | only that board is solved | Independent solve from shared guess |
+| 47 | `applyAllResults` — multiple boards solve simultaneously | two boards with `"solved"` status | both boards are solved, others unchanged | Multi-solve on same guess works |
+| 48 | `lockAllBoards` — unsolved boards locked | `lockAllBoards()` | all unsolved → locked | Timer expiry locks all remaining |
+| 49 | `lockAllBoards` — solved board unchanged | solve board 0, `lockAllBoards()` | `boards[0].status === "solved"` | Solved board not overwritten |
+| 50 | `lockAllBoards` — failed board unchanged | fail board 0, `lockAllBoards()` | `boards[0].status === "failed"` | Failed board not overwritten |
+| 51 | `lockAllBoards` — shared currentInput cleared | append letters, `lockAllBoards()` | `store.currentInput === ""` | Partial input wiped on lock |
+| 52 | `allTerminal` selector — false during active round | `initBoards` | returns `false` | Not terminal with unsolved boards |
+| 53 | `allTerminal` selector — true when all solved | solve all 4 | returns `true` | All solved = terminal |
+| 54 | `allTerminal` selector — true on mix of terminal states | mix solved/failed/locked | returns `true` | Any terminal combination qualifies |
+| 55 | `allTerminal` selector — false when one board still unsolved | 3 boards terminal, 1 unsolved | returns `false` | One unsolved board = not all terminal |
+| 56 | `unsolvedBoards` selector — returns all boards on init | `initBoards` | returns all 4 boards | All start unsolved |
+| 57 | `unsolvedBoards` selector — excludes solved board | solve board 1 | returns boards 0, 2, 3 | Solved board excluded from unsolved set |
+| 58 | `unsolvedBoards` selector — excludes failed board | fail board 2 | returns boards 0, 1, 3 | Failed board excluded from unsolved set |
+| 59 | `unsolvedBoards` selector — returns empty when all terminal | solve all 4 | returns `[]` | No unsolved boards when all done |
 
 ---
 
-### Step 2 — Board grid UI, keyboard input, and focus rules
+### Step 2 — Board grid UI, shared keyboard input
 
 **File:** `client/src/components/BoardGrid.test.tsx`
 **Type:** Component (React Testing Library + jsdom)
@@ -646,32 +668,28 @@ const WORDS = ["apple", "grape", "stone", "light"]
 
 | # | Test name | Setup | Action | Expected DOM / state | What it proves |
 |---|-----------|-------|--------|----------------------|----------------|
-| 70 | renders 4 boards | `initBoards` | render | 4 board containers present in DOM | All boards always render |
-| 71 | renders 9 rows per board | `initBoards` | render | each board has 9 row elements | Full attempt grid rendered |
-| 72 | renders 5 tiles per row | `initBoards` | render | each row has 5 tile elements | Correct tile count per row |
-| 73 | active board has active class/attribute | `initBoards` | render | board 0 has `data-status="active"` (or equivalent) | Visual state driven from store |
-| 74 | idle boards have idle class | `initBoards` | render | boards 1–3 have `data-status="idle"` | All idle boards marked correctly |
-| 75 | solved board has solved class | `applyResult(0,...,"solved")` | render | board 0 has `data-status="solved"` | Solved state reflected in DOM |
-| 76 | failed board shows target word | `applyResult × 9` to fail | render | target word visible in board 0 | Reveal row present on failure |
-| 77 | locked board has locked class | `lockAllBoards()` | render | all boards have `data-status="locked"` | Lock state reflected in DOM |
-| 78 | typing letter updates active board tile | `initBoards` | `keydown` `"c"` | board 0, row 0, tile 0 shows `"C"` | Input renders to correct tile |
-| 79 | typing 5 letters fills row | `initBoards` | `keydown` × 5 letters | board 0 row 0 shows all 5 letters | Full row filled from keyboard |
-| 80 | typing 6th letter has no effect | `initBoards` | `keydown` × 6 letters | row shows only 5 characters | Input cap enforced in UI |
-| 81 | backspace removes last letter | append 3 letters | `keydown "Backspace"` | board 0 row 0 shows 2 letters | Backspace removes correctly |
-| 82 | backspace on empty row is no-op | `initBoards` | `keydown "Backspace"` | no error; row remains empty | Empty backspace harmless |
-| 83 | typing on idle board has no effect | `initBoards` | `keydown "c"` (board 1 is idle) | board 1, row 0 tiles remain empty | Idle board ignores global key events |
-| 84 | typing blocked when all boards terminal | lock all | `keydown "c"` | all boards unchanged | Input fully blocked post-lock |
-| 85 | enter with fewer than 5 letters ignored | append 3 letters | `keydown "Enter"` | no submission; row still shows 3 letters | Short guess not submitted |
-| 86 | clicking idle board shifts focus | `initBoards` | click board 2 | board 2 is active, board 0 is idle | Click-to-focus works |
-| 87 | clicking active board has no effect | `initBoards` | click board 0 (already active) | board 0 stays active | Re-clicking active board is safe |
-| 88 | clicking solved board has no effect | solve board 1 | click board 1 | board 1 stays solved | Terminal board not focusable |
-| 89 | clicking locked board has no effect | lock all | click board 0 | board 0 stays locked | Locked board not focusable |
-| 90 | auto-advance on solve moves focus | solve board 0 via `applyResult` | render | board 1 becomes active | Focus shifts automatically |
-| 91 | auto-advance skips already-solved board | solve boards 0 and 1 | solve board 0 | board 2 becomes active | Skip logic works correctly |
-| 92 | no board active when all terminal | solve all 4 | render | no board has active class | Correct state when all complete |
-| 93 | submitted guess row shows result colours | `applyResult(0, "crane", ["grey","green","grey","grey","green"], "active")` | render | tiles in row 0 of board 0 have correct colour classes | Result array drives tile colours |
-| 94 | layout renders at mobile width | set viewport to 375px | render | boards visible, no overflow | Mobile responsive layout |
-| 95 | layout renders at desktop width | set viewport to 1280px | render | 2×2 grid layout correct | Desktop layout correct |
+| 60 | renders 4 boards | `initBoards` | render | 4 board containers in DOM | All boards always render |
+| 61 | renders 9 rows per board | `initBoards` | render | each board has 9 row elements | Full attempt grid rendered |
+| 62 | renders 5 tiles per row | `initBoards` | render | each row has 5 tile elements | Correct tile count per row |
+| 63 | all boards show unsolved state on init | `initBoards` | render | all boards have `data-status="unsolved"` | Visual state from store |
+| 64 | solved board has solved class | `applyBoardResult(0,...,"solved")` | render | board 0 has `data-status="solved"` | Solved state reflected in DOM |
+| 65 | failed board shows target word | apply 9 failing results to board 0 | render | target word visible below board 0 | Reveal row present on failure |
+| 66 | locked board has locked class | `lockAllBoards()` | render | all boards have `data-status="locked"` | Lock state reflected in DOM |
+| 67 | typing letter updates shared input on ALL unsolved boards | `initBoards` | `keydown "c"` | all 4 boards row 0 tile 0 shows `"C"` | Shared input renders on all unsolved boards |
+| 68 | typing 5 letters fills current row on all unsolved boards | `initBoards` | `keydown` × 5 letters | all 4 boards row 0 shows all 5 letters | Shared row fills across all boards |
+| 69 | typing 6th letter has no effect on any board | `initBoards` | `keydown` × 6 letters | all boards row 0 shows only 5 characters | Shared input cap enforced globally |
+| 70 | backspace removes last letter from all unsolved boards | append 3 letters | `keydown "Backspace"` | all boards row 0 shows 2 letters | Backspace reflected on all boards |
+| 71 | backspace on empty row is no-op on all boards | `initBoards` | `keydown "Backspace"` | no error; all rows remain empty | Empty backspace harmless |
+| 72 | typing does not appear on solved board | solve board 0 | `keydown "c"` | board 0 row unchanged; boards 1–3 show `"C"` | Solved board excluded from shared input |
+| 73 | typing does not appear on failed board | fail board 0 | `keydown "c"` | board 0 row unchanged; others show `"C"` | Failed board excluded from shared input |
+| 74 | typing blocked when all boards terminal | solve all 4 | `keydown "c"` | no board shows new input | Input fully blocked when all done |
+| 75 | enter with fewer than 5 letters ignored on all boards | append 3 letters | `keydown "Enter"` | no submission; all boards row still shows 3 letters | Short guess not submitted |
+| 76 | no click-to-focus interaction exists | `initBoards` | click board 2 | no state change; all boards remain in shared input mode | Focus model removed |
+| 77 | solved board shows completion highlight | `applyBoardResult(1,...,"solved")` | render | board 1 has completion highlight class | Visual solve feedback correct |
+| 78 | submitted guess row shows independent result colours per board | `applyAllResults([{board0: all grey}, {board1: all green}])` | render | board 0 tiles are grey; board 1 tiles are green | Each board shows its own result |
+| 79 | different results on different boards from same guess | same guess evaluated against different targets | render | board 0 and board 1 show different tile colours | Independent evaluation per board |
+| 80 | layout renders at mobile width | set viewport to 375px | render | boards visible, no overflow | Mobile responsive layout |
+| 81 | layout renders at desktop width | set viewport to 1280px | render | 2×2 grid layout correct | Desktop layout correct |
 
 ---
 
@@ -682,30 +700,31 @@ const WORDS = ["apple", "grape", "stone", "light"]
 **Type:** Integration (Socket.io test client + seeded Redis)
 **Runner:** `npx vitest run` with Redis running
 
-**Setup:** Each test seeds Redis with a valid active game (`status: "active"`, known `deadline`, known `words`, `attemptCount: 0`), creates a connected test socket with a valid session, and tears down Redis keys after.
+**Setup:** Each test seeds Redis with a valid active game (`status: "active"`, known `deadline`, known `words` for all 4 boards, `attemptCount: 0` for all boards), creates a connected test socket with a valid session, and tears down Redis keys after.
 
 | # | Test name | Condition | Expected `guess_result` | What it proves |
 |---|-----------|-----------|------------------------|----------------|
-| 96 | valid guess returns correct result array | valid game, valid word | `result` matches `matchGuess(guess, target)` | Server calls matching engine correctly |
-| 97 | valid guess returns correct scoreDelta — mixed | some green, some yellow | `scoreDelta` = (greens × 3) + (yellows × 1) | Scoring calculation correct |
-| 98 | valid guess — solve bonus applied | all 5 green | `scoreDelta` includes +10 | Word solve bonus added |
-| 99 | early finish bonus — all 4 boards solved | submit winning guess on board 3 with time remaining | `scoreDelta` includes `floor(secondsRemaining / 10)` | Early finish bonus calculated |
-| 100 | attempt count increments in Redis | submit valid guess | `HGET attempts` returns 1 | Redis write correct |
-| 101 | leaderboard updated in Redis | submit valid guess | `ZSCORE leaderboard playerId` increases by scoreDelta | Leaderboard sorted set updated |
-| 102 | guess record appended to PostgreSQL | submit valid guess | DB row exists with correct fields | Async persistence fires |
-| 103 | `guess_result` emitted to player only | submit valid guess | only submitting socket receives `guess_result` | Private emit to player |
-| 104 | `leaderboard_update` emitted to room | submit valid guess | all sockets in room receive `leaderboard_update` | Broadcast to room correct |
-| 105 | invalid game ID — silently ignored | unknown `gameId` | no response | Missing game silently dropped |
-| 106 | game not active — error returned | `status: "waiting"` | `{ error: "game_not_active" }` | Game status check |
-| 107 | stale round number — error returned | `roundNumber` does not match server | `{ error: "stale_round" }` | Round number validated |
-| 108 | past deadline — error returned | submit after `deadline` has passed | `{ error: "round_expired" }` | Server deadline enforced |
-| 109 | invalid boardIndex — error returned | `boardIndex: 5` | `{ error: "invalid_board" }` | Board index validated |
-| 110 | board already solved — error returned | board already in solved state | `{ error: "board_not_active" }` | Cannot guess on solved board |
-| 111 | max attempts reached — error returned | `attemptCount: 9` already in Redis | `{ error: "max_attempts_reached" }` | Attempt cap enforced server-side |
-| 112 | invalid format — error returned | guess with digits `"cran3"` | `{ error: "invalid_format" }` | Non-alpha characters rejected |
-| 113 | guess not in word list — error returned | valid format but unknown word | `{ error: "not_a_word" }` | Word list check fires |
-| 114 | not_a_word — attempt count not incremented | submit invalid word | `HGET attempts` still returns 0 | Rejected guess not counted |
-| 115 | double submission blocked by submitting flag | set `submitting: true` in store, submit | `submitting` flag prevents second emit | Client-side in-flight guard |
+| 82 | valid guess — result returned for all 4 unsolved boards | all boards unsolved | `boards[]` has 4 entries, each with correct `result` | Server evaluates all unsolved boards |
+| 83 | valid guess — each board result is independent | boards have different target words | each board's `result` differs appropriately | Per-board matching engine called separately |
+| 84 | valid guess — `totalScoreDelta` is sum of per-board deltas | mixed results across boards | `totalScoreDelta === sum(boards[].scoreDelta)` | Score aggregation correct |
+| 85 | valid guess — solve bonus included when one board solved | guess solves board 1 | `boards[1].scoreDelta` includes +10 | Per-board solve bonus applied |
+| 86 | early finish bonus — all 4 boards solved in one guess | winning guess solves all 4 simultaneously | `totalScoreDelta` includes `floor(secondsRemaining / 10)` | Early finish bonus when all boards solved |
+| 87 | attempt count increments on all evaluated boards | submit valid guess with all boards unsolved | `HGET attempts board 0,1,2,3` each returns 1 | Redis HINCRBY fires per unsolved board |
+| 88 | solved board skipped — not in response `boards[]` | board 0 already solved | `boards[]` contains only boards 1, 2, 3 | Already-solved board excluded from evaluation |
+| 89 | solved board attempt count not incremented | board 0 already solved | `HGET attempts board 0` still returns prior count | No extra write to already-solved board |
+| 90 | `guess_result` emitted to player only | submit valid guess | only submitting socket receives `guess_result` | Private emit correct |
+| 91 | `leaderboard_update` emitted to room | submit valid guess | all room sockets receive `leaderboard_update` | Broadcast correct |
+| 92 | leaderboard updated by `totalScoreDelta` | submit valid guess | `ZSCORE leaderboard playerId` increases by `totalScoreDelta` | Single Redis ZINCRBY with aggregated score |
+| 93 | guess record appended to PostgreSQL | submit valid guess | DB row exists with `guess`, `allBoardResults[]`, `totalScoreDelta` | Async persistence correct |
+| 94 | invalid game ID — silently ignored | unknown `gameId` | no response | Missing game silently dropped |
+| 95 | game not active — error returned | `status: "waiting"` | `{ error: "game_not_active" }` | Game status check |
+| 96 | stale round number — error returned | `roundNumber` does not match server | `{ error: "stale_round" }` | Round number validated |
+| 97 | past deadline — error returned | submit after `deadline` has passed | `{ error: "round_expired" }` | Server deadline enforced |
+| 98 | all boards terminal — error returned | all 4 boards already solved/failed | `{ error: "all_boards_terminal" }` | No evaluation when all done |
+| 99 | invalid format — error returned | guess with digits `"cran3"` | `{ error: "invalid_format" }` | Non-alpha characters rejected |
+| 100 | guess not in word list — error returned | valid format but unknown word | `{ error: "not_a_word" }` | Word list check fires |
+| 101 | not_a_word — no attempt count incremented on any board | submit invalid word | all `HGET attempts` still return prior count | Rejected guess costs no board its attempt |
+| 102 | double submission blocked by global submitting flag | `submitting: true` in store, submit | second emit blocked client-side | Global in-flight guard works |
 
 #### 3B — Client result handling unit tests
 **File:** `client/src/store/boardStore.resultHandling.test.ts`
@@ -714,17 +733,17 @@ const WORDS = ["apple", "grape", "stone", "light"]
 
 | # | Test name | Event received | Expected store state | What it proves |
 |---|-----------|---------------|----------------------|----------------|
-| 116 | success result — guess added to history | `guess_result` success | `guesses.length === 1` | Result written to store |
-| 117 | success result — currentInput cleared | `guess_result` success | `currentInput === ""` | Row cleared after server responds |
-| 118 | success result — submitting cleared | `guess_result` success | `submitting === false` | In-flight flag released |
-| 119 | success result — board stays active | `boardStatus: "active"` | `status === "active"` | Non-terminal guess keeps board active |
-| 120 | success result — board transitions solved | `boardStatus: "solved"` | `status === "solved"` | Solve transition from server |
-| 121 | success result — board transitions failed | `boardStatus: "failed"` | `status === "failed"` | Fail transition from server |
-| 122 | `not_a_word` error — currentInput preserved | `error: "not_a_word"` | `currentInput` unchanged | Player can fix and resubmit |
-| 123 | `not_a_word` error — attempt count not incremented | `error: "not_a_word"` | `attemptCount` unchanged | Invalid word does not cost an attempt |
-| 124 | `not_a_word` error — submitting cleared | `error: "not_a_word"` | `submitting === false` | Board unlocked after rejection |
-| 125 | `round_expired` error — all non-terminal boards locked | `error: "round_expired"` | active and idle boards → locked | Timer expiry via error path |
-| 126 | `round_expired` error — solved board unaffected | solved board present, `error: "round_expired"` | solved board stays solved | Terminal boards protected |
+| 103 | success result — guess added to all evaluated boards | `guess_result` with 4 board entries | all 4 boards have `guesses.length === 1` | Results written to all boards |
+| 104 | success result — shared currentInput cleared | `guess_result` success | `store.currentInput === ""` | Shared row cleared |
+| 105 | success result — global submitting cleared | `guess_result` success | `store.submitting === false` | Global flag released |
+| 106 | success result — one board solved, others stay unsolved | one board `boardStatus: "solved"` | that board is solved; others remain unsolved | Independent solve transition |
+| 107 | success result — multiple boards solved simultaneously | two boards `boardStatus: "solved"` | both boards are solved | Multi-solve on same guess |
+| 108 | success result — board transitions to failed | `boardStatus: "failed"` on one board | that board is failed; others continue | Independent fail transition |
+| 109 | `not_a_word` error — shared currentInput preserved | `error: "not_a_word"` | `store.currentInput` unchanged | Player can fix and resubmit |
+| 110 | `not_a_word` error — no board attempt counts incremented | `error: "not_a_word"` | all `board.guesses.length` unchanged | Invalid word costs no board |
+| 111 | `not_a_word` error — global submitting cleared | `error: "not_a_word"` | `store.submitting === false` | Input unblocked after rejection |
+| 112 | `round_expired` error — all unsolved boards locked | `error: "round_expired"` | all unsolved boards → locked | Timer expiry via error path |
+| 113 | `round_expired` error — solved board unaffected | solved board present | solved board stays solved | Terminal boards protected |
 
 ---
 
@@ -737,17 +756,18 @@ const WORDS = ["apple", "grape", "stone", "light"]
 
 | # | Test name | Setup | Action | Expected | What it proves |
 |---|-----------|-------|--------|----------|----------------|
-| 127 | tile has no colour class before submission | empty tile | render | no green/yellow/grey class | Unsubmitted tile is unstyled |
-| 128 | tile gets green class after green result | `applyResult` with green at position | render after result | tile has green class | Colour applied from result |
-| 129 | tile gets yellow class after yellow result | `applyResult` with yellow at position | render after result | tile has yellow class | Yellow applied correctly |
-| 130 | tile gets grey class after grey result | `applyResult` with grey at position | render after result | tile has grey class | Grey applied correctly |
-| 131 | flip animation class applied on result | `applyResult` | check immediately after | animation class present on tiles | Animation triggered by result |
-| 132 | tiles flip left-to-right — tile 0 animates first | `applyResult` | observe animation sequence | tile 0 animation starts before tile 4 | Stagger order correct |
-| 133 | input blocked during animation | `submitting: true` | `keydown "c"` | `currentInput` unchanged | Animation gate blocks input |
-| 134 | input unblocked after animation completes | animation completes | `keydown "c"` | `currentInput === "C"` | Gate released after animation |
-| 135 | shake class applied on not_a_word | `error: "not_a_word"` from server | render | current row has shake class | Invalid word feedback visible |
-| 136 | shake class removed after animation | shake plays | wait for animation | shake class no longer present | Shake is transient |
-| 137 | no flip animation on not_a_word rejection | `error: "not_a_word"` | render | no flip class on tiles | Shake and flip are mutually exclusive |
+| 114 | tile has no colour class before submission | empty tile | render | no green/yellow/grey class | Unsubmitted tile is unstyled |
+| 115 | tile gets green class after green result | `applyBoardResult` with green at position | render after result | tile has green class | Colour applied from result |
+| 116 | tile gets yellow class after yellow result | `applyBoardResult` with yellow | render after result | tile has yellow class | Yellow applied correctly |
+| 117 | tile gets grey class after grey result | `applyBoardResult` with grey | render after result | tile has grey class | Grey applied correctly |
+| 118 | flip animation fires on all unsolved boards simultaneously | `applyAllResults` | check immediately after | animation class present on tiles of all evaluated boards | Parallel animation triggered |
+| 119 | tiles flip left-to-right within each board | `applyAllResults` | observe animation sequence per board | tile 0 animates before tile 4 on every board | Per-board stagger order correct |
+| 120 | input blocked during animation — global submitting flag | `submitting: true` | `keydown "c"` | `store.currentInput` unchanged | Animation gate blocks shared input |
+| 121 | input unblocked after ALL board animations complete | all board animations done | `keydown "c"` | `store.currentInput === "C"` | Gate waits for all boards, not just one |
+| 122 | shake animation fires on all unsolved boards for not_a_word | `error: "not_a_word"` | render | all unsolved boards' current rows have shake class | Shared shake across all unsolved boards |
+| 123 | shake class removed after animation | shake plays | wait for animation | shake class no longer present on any board | Shake is transient |
+| 124 | no flip animation on not_a_word rejection | `error: "not_a_word"` | render | no flip class on any tiles | Shake and flip mutually exclusive |
+| 125 | solved board does not animate on subsequent guesses | board 0 solved, then new shared guess | render | board 0 shows no animation; boards 1–3 animate | Solved board excluded from animation |
 
 #### 4B — Timer expiry lock component tests
 **File:** `client/src/components/BoardGrid.timerLock.test.tsx`
@@ -756,12 +776,10 @@ const WORDS = ["apple", "grape", "stone", "light"]
 
 | # | Test name | Setup | Action | Expected | What it proves |
 |---|-----------|-------|--------|----------|----------------|
-| 138 | `round_ended` event locks active board | active board in progress | emit `round_ended` | board 0 has locked class | Round end event triggers lock |
-| 139 | `round_ended` event locks idle boards | boards 1–3 idle | emit `round_ended` | all idle boards locked | All non-terminal boards lock |
-| 140 | `round_ended` does not lock solved board | board 0 solved | emit `round_ended` | board 0 stays solved | Solved boards protected from lock |
-| 141 | `round_ended` does not lock failed board | board 0 failed | emit `round_ended` | board 0 stays failed | Failed boards protected from lock |
-| 142 | currentInput cleared on lock | letters typed in active board | emit `round_ended` | active board `currentInput === ""` | Partial input wiped |
-| 143 | typing blocked after lock | `round_ended` received | `keydown "c"` | no board input changes | Locked boards ignore keyboard |
-| 144 | click focus blocked after lock | `round_ended` received | click board 1 | board 1 stays locked | Locked boards not clickable |
-| 145 | mid-animation lock — animation completes then locks | guess in-flight when `round_ended` fires | observe | animation plays to completion then board locks | Animation not abruptly cut off |
-| 146 | mid-animation lock — result not counted | `round_ended` arrives before result | observe state after | board does not transition to solved/failed from that guess | Server deadline takes precedence |
+| 126 | `round_ended` locks all unsolved boards | all boards unsolved | emit `round_ended` | all boards have locked class | Round end locks all unsolved |
+| 127 | `round_ended` does not lock solved board | board 0 solved | emit `round_ended` | board 0 stays solved | Solved board protected from lock |
+| 128 | `round_ended` does not lock failed board | board 0 failed | emit `round_ended` | board 0 stays failed | Failed board protected from lock |
+| 129 | shared currentInput cleared on lock | letters typed | emit `round_ended` | `store.currentInput === ""` | Partial shared input wiped |
+| 130 | typing blocked after lock | `round_ended` received | `keydown "c"` | no board input changes | Input fully blocked post-lock |
+| 131 | mid-animation lock — all animations complete then boards lock | guess in-flight when `round_ended` fires | observe | all animations play to completion then boards lock | Animations not abruptly cut off |
+| 132 | mid-animation lock — result not counted | `round_ended` arrives before results | observe state after | no board transitions to solved/failed | Server deadline takes precedence |
