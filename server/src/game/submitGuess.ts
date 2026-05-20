@@ -1,5 +1,6 @@
 import { matchGuess } from "./matchGuess";
 import { VALID_WORDS } from "./wordList";
+import { calculateScore } from "./calculateScore";
 import type { TileResult } from "shared/types/game";
 
 // ---------------------------------------------------------------------------
@@ -54,15 +55,6 @@ export type GuessResultError = {
     | "invalid_format"
     | "not_a_word";
 };
-
-// ---------------------------------------------------------------------------
-// Scoring
-// ---------------------------------------------------------------------------
-
-function calcBoardScore(result: TileResult[], solved: boolean): number {
-  return result.reduce((s, r) => s + (r === "green" ? 3 : r === "yellow" ? 1 : 0), 0) +
-    (solved ? 10 : 0);
-}
 
 // ---------------------------------------------------------------------------
 // Handler — pure function, no I/O
@@ -131,8 +123,7 @@ export function handleSubmitGuess(
     // Early-finish bonus: only applies when this solve makes all boards terminal
     const allTerminalNow =
       solved && player.boards.every((b) => b.status === "solved" || b.status === "failed");
-    const bonusScore = allTerminalNow ? Math.floor(secondsRemaining / 10) : 0;
-    const scoreDelta = calcBoardScore(result, solved) + bonusScore;
+    const scoreDelta = calculateScore(result, solved, allTerminalNow, secondsRemaining);
 
     player.score += scoreDelta;
     boardResults.push({ boardIndex: idx, result, scoreDelta, boardStatus });
