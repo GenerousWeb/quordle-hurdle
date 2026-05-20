@@ -1,3 +1,9 @@
+export type GameConfig = {
+  maxPlayers: number;
+  rounds: number;
+  timeLimitSeconds: number;
+};
+
 export type TileResult = "green" | "yellow" | "grey";
 
 export type TileState = "empty" | "typing" | "green" | "yellow" | "grey";
