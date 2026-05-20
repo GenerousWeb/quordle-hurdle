@@ -2,6 +2,7 @@ import { games } from "../../game/submitGuess";
 import { VALID_WORDS } from "../../game/wordList";
 import { startRoundTimer } from "../../game/timer";
 import { buildRoundEndedPayload } from "../../game/roundEnd";
+import { buildGameEndedPayload } from "../../game/endGame";
 import { gamePlayers } from "../../routes/joinGame";
 import { selectWords } from "../../game/selectWords";
 
@@ -28,9 +29,31 @@ type SocketLike = {
   on(event: string, handler: (payload: Record<string, string>) => void): void;
 };
 
+function buildEndGamePayloadFromState(gameId: string) {
+  const game = games.get(gameId);
+  const playerNames = gamePlayers.get(gameId) ?? new Map<string, { name: string }>();
+  const playerData = Array.from(game?.players.entries() ?? []).map(([pid, p]) => ({
+    playerId: pid,
+    name: playerNames.get(pid)?.name ?? "Unknown",
+    totalScore: p.score,
+    boardsSolved: p.boards.filter((b) => b.status === "solved").length,
+  }));
+  return buildGameEndedPayload(playerData);
+}
+
 function fireRoundEnded(io: IoLike, gameId: string): void {
   const adminGame = adminGames.get(gameId);
   if (!adminGame) return;
+
+  const isFinalRound = adminGame.roundNumber >= adminGame.totalRounds;
+
+  if (isFinalRound) {
+    adminGame.status = "finished";
+    const game = games.get(gameId);
+    if (game) game.status = "ended";
+    io.to(gameId).emit("game_ended", buildEndGamePayloadFromState(gameId));
+    return;
+  }
 
   const game = games.get(gameId);
   const playerNames = gamePlayers.get(gameId) ?? new Map<string, { name: string }>();
@@ -159,7 +182,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       game.status = "ended";
     }
 
-    io.to(gameId).emit("game_ended", {});
+    io.to(gameId).emit("game_ended", buildEndGamePayloadFromState(gameId));
   });
 
   socket.on("restart_game", ({ gameId }) => {
