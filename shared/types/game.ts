@@ -27,3 +27,14 @@ export type BoardState = {
   targetWord: string | null;
   guesses: GuessRow[];
 };
+
+export type RoundSummary = {
+  roundNumber: number;
+  words: string[];
+  leaderboard: Array<{
+    playerId: string;
+    name: string;
+    roundScore: number;
+    totalScore: number;
+  }>;
+};
