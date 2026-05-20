@@ -1,5 +1,8 @@
 import { games } from "../../game/submitGuess";
 import { VALID_WORDS } from "../../game/wordList";
+import { startRoundTimer } from "../../game/timer";
+import { buildRoundEndedPayload } from "../../game/roundEnd";
+import { gamePlayers } from "../../routes/joinGame";
 
 export type AdminGameState = {
   status: "waiting" | "active" | "between_rounds" | "finished";
@@ -9,6 +12,7 @@ export type AdminGameState = {
   currentWords: string[];
   usedWords: Set<string>;
   adminPlayerId: string;
+  roundStartScores?: Map<string, number>;
 };
 
 export const adminGames = new Map<string, AdminGameState>();
@@ -22,6 +26,29 @@ type SocketLike = {
   emit(event: string, data?: unknown): void;
   on(event: string, handler: (payload: Record<string, string>) => void): void;
 };
+
+function fireRoundEnded(io: IoLike, gameId: string): void {
+  const adminGame = adminGames.get(gameId);
+  if (!adminGame) return;
+
+  const game = games.get(gameId);
+  const playerNames = gamePlayers.get(gameId) ?? new Map<string, { name: string }>();
+  const playerData = Array.from(game?.players.entries() ?? []).map(([pid, p]) => ({
+    playerId: pid,
+    name: playerNames.get(pid)?.name ?? "Unknown",
+    totalScore: p.score,
+    roundStartScore: adminGame.roundStartScores?.get(pid) ?? 0,
+  }));
+
+  const payload = buildRoundEndedPayload(
+    adminGame.roundNumber,
+    adminGame.currentWords,
+    playerData,
+  );
+
+  adminGame.status = "between_rounds";
+  io.to(gameId).emit("round_ended", payload);
+}
 
 function selectRandomWords(count: number, exclude: Set<string>): string[] {
   const pool = Array.from(VALID_WORDS).filter((w) => !exclude.has(w));
@@ -67,6 +94,13 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       game.deadline = deadline;
     }
 
+    // Snapshot per-player scores at round start for round-score delta calculation
+    const roundStartScores = new Map<string, number>();
+    for (const [pid, p] of (game?.players ?? new Map())) {
+      roundStartScores.set(pid, p.score);
+    }
+    adminGame.roundStartScores = roundStartScores;
+
     io.to(gameId).emit("round_started", {
       words,
       roundNumber: 1,
@@ -74,6 +108,8 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       deadline,
       timeLimitSeconds: adminGame.timeLimitSeconds,
     });
+
+    startRoundTimer(io, gameId, deadline, () => fireRoundEnded(io, gameId));
   });
 
   socket.on("start_next_round", ({ gameId }) => {
@@ -101,6 +137,13 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       game.deadline = deadline;
     }
 
+    // Snapshot per-player scores at round start
+    const roundStartScores = new Map<string, number>();
+    for (const [pid, p] of (game?.players ?? new Map())) {
+      roundStartScores.set(pid, p.score);
+    }
+    adminGame.roundStartScores = roundStartScores;
+
     io.to(gameId).emit("round_started", {
       words,
       roundNumber: adminGame.roundNumber,
@@ -108,6 +151,8 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       deadline,
       timeLimitSeconds: adminGame.timeLimitSeconds,
     });
+
+    startRoundTimer(io, gameId, deadline, () => fireRoundEnded(io, gameId));
   });
 
   socket.on("end_game", ({ gameId }) => {

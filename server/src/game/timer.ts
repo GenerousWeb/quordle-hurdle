@@ -9,7 +9,12 @@ type ActiveTimer = {
 
 const activeTimers = new Map<string, ActiveTimer>();
 
-export function startRoundTimer(io: TimerIO, gameId: string, deadline: number): void {
+export function startRoundTimer(
+  io: TimerIO,
+  gameId: string,
+  deadline: number,
+  onExpired?: () => void,
+): void {
   stopRoundTimer(gameId);
 
   const now = Date.now();
@@ -22,7 +27,11 @@ export function startRoundTimer(io: TimerIO, gameId: string, deadline: number): 
   const deadlineTimeout = setTimeout(() => {
     clearInterval(syncInterval);
     activeTimers.delete(gameId);
-    io.to(gameId).emit("round_ended");
+    if (onExpired) {
+      onExpired();
+    } else {
+      io.to(gameId).emit("round_ended");
+    }
   }, delay);
 
   activeTimers.set(gameId, { deadlineTimeout, syncInterval });
