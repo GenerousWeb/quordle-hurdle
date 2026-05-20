@@ -2,6 +2,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { games, handleSubmitGuess } from "./game/submitGuess";
 import type { GuessResultError, GuessResultSuccess } from "./game/submitGuess";
+import { registerAdminHandlers } from "./socket/handlers/adminHandlers";
 
 const httpServer = createServer();
 
@@ -11,6 +12,8 @@ const io = new Server(httpServer, {
 
 io.on("connection", (socket) => {
   const playerId = socket.handshake.auth.playerId as string | undefined;
+
+  registerAdminHandlers(io, socket);
 
   socket.on("join_game", ({ gameId }: { gameId: string }) => {
     void socket.join(gameId);

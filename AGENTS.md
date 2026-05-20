@@ -132,6 +132,7 @@ quordle-hurdle/
 | `BoardGrid.tsx` | `BoardGrid` — 4-board grid. Props: `onEnter?`. Reads `boardStore`. Data attrs: `data-board-index`, `data-status`, `data-row-index`, `data-tile-index`, `data-reveal-row`. | `BoardGrid.test.tsx`, `BoardGrid.flip.test.tsx`, `BoardGrid.shake.test.tsx`, `BoardGrid.errors.test.tsx`, `BoardGrid.staticStates.test.tsx`, `BoardGrid.timerLock.test.tsx` |
 | `TimerDisplay.tsx` | `TimerDisplay` — countdown timer. Props: `deadline: number, syncedDeadline?: number, stopped?: boolean`. Data attrs: `data-testid="timer-display"`, `data-urgent="true\|false"`. Calls `lockAllBoards()` at zero or when stopped. | `TimerDisplay.test.tsx`, `TimerDisplay.sync.test.tsx` |
 | `WaitingRoom.tsx` | `WaitingRoom` — waiting room UI. Props: `inviteLink, players, isAdmin, rounds, timeLimitSeconds, maxPlayers, onStart`. Data attrs: `data-testid="copy-link-button"`, `data-testid="qr-code-area"`, `data-testid="config-summary"`, `data-testid="player-list"`, `data-testid="admin-badge"`, `data-testid="start-game-button"`, `data-testid="waiting-message"`. | `WaitingRoom.test.tsx`, `WaitingRoom.realtime.test.tsx` |
+| `AdminControls.tsx` | `AdminControls` — contextual admin action buttons. Props: `isAdmin, status, players, onStartGame?, onStartNextRound?, onEndGame?, onRestartGame?, onShuffleWords?`. Renders: Start Game (`data-testid="admin-start-game"`) in `waiting`; Start Next Round (`data-testid="admin-start-next-round"`) + End Game (`data-testid="admin-end-game"`) in `between_rounds`; Play Again (`data-testid="admin-play-again"`) in `finished`; waiting message (`data-testid="admin-waiting-message"`) for non-admin in `waiting`. Start Game disabled when `players.length === 0`. | `AdminControls.test.tsx` |
 
 ### client/src/pages/ — page-level components (tested with Vitest + RTL)
 | File | Exports | Test files |
@@ -159,7 +160,8 @@ quordle-hurdle/
 ### server/src/ — Socket.io server
 | File | Exports | Purpose |
 |------|---------|---------|
-| `index.ts` | `io`, `games` | Server entry. Handles: `join_game`, `submit_guess`. Emits: `guess_result`, `leaderboard_update`. |
+| `index.ts` | `io`, `games` | Server entry. Handles: `join_game`, `submit_guess`. Registers `registerAdminHandlers` per connection. Emits: `guess_result`, `leaderboard_update`. |
+| `socket/handlers/adminHandlers.ts` | `registerAdminHandlers(io, socket)`, `adminGames` (Map), `AdminGameState` | Admin WebSocket handlers. `adminGames`: Map of gameId→`AdminGameState` (status, totalRounds, roundNumber, timeLimitSeconds, currentWords, usedWords, adminPlayerId). Handles: `start_game`, `start_next_round`, `end_game`, `restart_game`, `shuffle_words`. All reject non-admin with `not_authorized`. |
 | `game/submitGuess.ts` | `handleSubmitGuess`, `games` (Map), types: `GameState`, `PlayerState`, `BoardState`, `GuessResultSuccess`, `GuessResultError` | Pure guess handler. `GameState` has `status, roundNumber, deadline, players`. |
 | `game/matchGuess.ts` | `matchGuess(guess, target)` → `TileResult[]` | Wordle-style tile scoring. |
 | `game/wordList.ts` | `VALID_WORDS: Set<string>` | Valid 5-letter word list. |
@@ -235,8 +237,13 @@ BoardState  = { targetWord: string; attemptCount: number; status: "unsolved"|"so
 | Server → Client | `round_ended` | (none) | `client/src/socket/useGameSocket.ts` → `lockAllBoards`; `app/pages/GamePage.tsx` → `setTimerStopped(true)` |
 | Server → Client | `round_started` | `{ words: string[], startTime: number, deadline: number, timeLimitSeconds: number }` | `client/src/socket/useGameSocket.ts` → `initBoards`; `app/pages/GamePage.tsx` → `setTimerDeadline` |
 | Server → Client | `timer_sync` | `{ deadline: number }` | `app/pages/GamePage.tsx` → `setSyncedDeadline` → passed as prop to `TimerDisplay` |
-| Client → Server | `start_game` | `{ gameId }` | `app/pages/WaitingRoomPage.tsx` → admin Start Game button |
-| Server → Client | `game_state_update` | `{ players: Player[], status: string, settings: GameConfig }` | `app/pages/WaitingRoomPage.tsx` → `gameStore.handleGameStateUpdate` |
+| Client → Server | `start_game` | `{ gameId }` | `server/src/socket/handlers/adminHandlers.ts` — admin only; transitions to `active`, fires `round_started` |
+| Client → Server | `start_next_round` | `{ gameId }` | `server/src/socket/handlers/adminHandlers.ts` — admin only; from `between_rounds`, fires `round_started` |
+| Client → Server | `end_game` | `{ gameId }` | `server/src/socket/handlers/adminHandlers.ts` — admin only; transitions to `finished`, fires `game_ended` |
+| Client → Server | `restart_game` | `{ gameId }` | `server/src/socket/handlers/adminHandlers.ts` — admin only; resets scores/usedWords to `waiting` |
+| Client → Server | `shuffle_words` | `{ gameId }` | `server/src/socket/handlers/adminHandlers.ts` — admin only; re-draws 4 words server-side silently |
+| Server → Client | `game_ended` | `{}` | fired on `end_game`; client navigates to end screen |
+| Server → Client | `game_state_update` | `{ players: Player[], status: string, settings: GameConfig }` | `app/pages/WaitingRoomPage.tsx` → `gameStore.handleGameStateUpdate`; also fired on `restart_game` |
 
 ## API route reference (current state)
 
