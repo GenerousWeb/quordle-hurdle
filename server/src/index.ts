@@ -3,12 +3,16 @@ import { Server } from "socket.io";
 import { games, handleSubmitGuess } from "./game/submitGuess";
 import type { GuessResultError, GuessResultSuccess } from "./game/submitGuess";
 import { registerAdminHandlers } from "./socket/handlers/adminHandlers";
+import { handlePlayerDisconnect, handlePlayerJoinSocket } from "./routes/joinGame";
 
 const httpServer = createServer();
 
 const io = new Server(httpServer, {
   cors: { origin: "*" },
 });
+
+// Tracks socket.id → { gameId, playerId } for disconnect handling
+const socketContext = new Map<string, { gameId: string; playerId: string }>();
 
 io.on("connection", (socket) => {
   const playerId = socket.handshake.auth.playerId as string | undefined;
@@ -17,6 +21,19 @@ io.on("connection", (socket) => {
 
   socket.on("join_game", ({ gameId }: { gameId: string }) => {
     void socket.join(gameId);
+
+    if (playerId) {
+      socketContext.set(socket.id, { gameId, playerId });
+      handlePlayerJoinSocket(io, gameId, playerId);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    const ctx = socketContext.get(socket.id);
+    if (ctx) {
+      socketContext.delete(socket.id);
+      handlePlayerDisconnect(io, ctx.gameId, ctx.playerId);
+    }
   });
 
   socket.on(
