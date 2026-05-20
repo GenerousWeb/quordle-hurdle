@@ -4,12 +4,14 @@ import { BoardGrid } from "client/components/BoardGrid";
 import { TimerDisplay } from "client/components/TimerDisplay";
 import { ScorePopup } from "client/components/ScorePopup";
 import { PlayerDot } from "client/components/PlayerDot";
+import { OpponentStrip } from "client/components/OpponentStrip";
 import { boardStore } from "client/store/boardStore";
 import { gameStore } from "client/store/gameStore";
 import { useGameSocket } from "client/socket/useGameSocket";
 import { useEffect, useState } from "react";
 import { useStore } from "zustand";
 import { io } from "socket.io-client";
+import type { GameConfig, LeaderboardEntry, Player } from "shared/types/game";
 
 const SERVER_URL = "http://localhost:3001";
 
@@ -29,6 +31,23 @@ export default function GamePage() {
   const [scorePopup, setScorePopup] = useState<{ delta: number; key: number } | null>(null);
   const myScore = useStore(boardStore, (s) => s.myScore);
   const leaderboard = useStore(gameStore, (s) => s.leaderboard);
+  const players = useStore(gameStore, (s) => s.players);
+
+  const opponents = (() => {
+    const leaderboardMap = new Map<string, LeaderboardEntry>(leaderboard.map((e) => [e.playerId, e]));
+    return players
+      .filter((p: Player) => p.playerId !== PLACEHOLDER_PLAYER_ID)
+      .map((p: Player) => {
+        const lb = leaderboardMap.get(p.playerId);
+        return {
+          playerId: p.playerId,
+          name: p.name,
+          score: lb?.score ?? 0,
+          boardsSolved: lb?.boardsSolved ?? 0,
+          isConnected: p.isConnected,
+        };
+      });
+  })();
 
   // Seed boards locally until round_started event arrives from server
   useEffect(() => {
@@ -80,6 +99,13 @@ export default function GamePage() {
       },
     );
 
+    socket.on(
+      "game_state_update",
+      (data: { players: Player[]; status: string; settings: GameConfig }) => {
+        gameStore.getState().handleGameStateUpdate(data);
+      },
+    );
+
     return () => {
       socket.disconnect();
     };
@@ -117,6 +143,11 @@ export default function GamePage() {
                 isMe={entry.playerId === PLACEHOLDER_PLAYER_ID}
               />
             ))}
+          </div>
+        )}
+        {opponents.length > 0 && (
+          <div className="mb-4 w-full">
+            <OpponentStrip opponents={opponents} myPlayerId={PLACEHOLDER_PLAYER_ID} />
           </div>
         )}
         <BoardGrid onEnter={handleEnter} />
