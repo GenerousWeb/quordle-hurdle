@@ -13,12 +13,14 @@ type BoardStore = {
   currentInput: string;
   submitting: boolean;
   shaking: boolean;
+  myScore: number;
 
   initBoards: (words: string[]) => void;
   appendLetter: (letter: string) => void;
   deleteLetter: () => void;
   setSubmitting: (value: boolean) => void;
   setShaking: (value: boolean) => void;
+  setMyScore: (score: number) => void;
   applyBoardResult: (
     boardIndex: number,
     word: string,
@@ -34,6 +36,7 @@ export const boardStore = createStore<BoardStore>((set, get) => ({
   currentInput: "",
   submitting: false,
   shaking: false,
+  myScore: 0,
 
   initBoards: (words: string[]) => {
     const boards: BoardState[] = words.map((word) => ({
@@ -66,6 +69,10 @@ export const boardStore = createStore<BoardStore>((set, get) => ({
 
   setShaking: (value: boolean) => {
     set({ shaking: value });
+  },
+
+  setMyScore: (score: number) => {
+    set({ myScore: score });
   },
 
   applyBoardResult: (
