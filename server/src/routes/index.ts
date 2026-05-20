@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { handleCreateGame } from "./createGame";
+import { handleJoinGame } from "./joinGame";
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve) => {
@@ -26,6 +27,19 @@ export async function handleRequest(
     const result = handleCreateGame(body);
 
     if (result.cookie) {
+      res.setHeader("Set-Cookie", result.cookie);
+    }
+    res.statusCode = result.status;
+    res.end(JSON.stringify(result.body));
+    return;
+  }
+
+  if (method === "POST" && url === "/game/join") {
+    const raw = await readBody(req);
+    const body = JSON.parse(raw) as Record<string, unknown>;
+    const result = handleJoinGame(body);
+
+    if (result.status === 200 && result.cookie) {
       res.setHeader("Set-Cookie", result.cookie);
     }
     res.statusCode = result.status;

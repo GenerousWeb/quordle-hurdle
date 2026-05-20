@@ -123,6 +123,7 @@ quordle-hurdle/
 | `app/components/layout/Footer.tsx` | Static footer |
 | `app/pages/GamePage.tsx` | Active game page. Uses `useGameSocket`, renders `<BoardGrid onEnter>` inside `<AppShell>`. Seeds boards locally on mount as placeholder. |
 | `app/pages/WaitingRoomPage.tsx` | Waiting room page (`/wait/:gameId`). Mounts `<WaitingRoom>`. Connects socket, emits `join_game`, handles `game_state_update` → `gameStore`. Emits `start_game` on admin button click. |
+| `app/pages/GamePage.tsx` | Active game page (`/play/:gameId`). Reads `location.state.deadline` (from mid-round join) to pre-seed `timerDeadline` on mount. |
 
 ### client/src/components/ — React components (tested with Vitest + RTL)
 | File | Exports | Test files |
@@ -132,11 +133,23 @@ quordle-hurdle/
 | `TimerDisplay.tsx` | `TimerDisplay` — countdown timer. Props: `deadline: number, syncedDeadline?: number, stopped?: boolean`. Data attrs: `data-testid="timer-display"`, `data-urgent="true\|false"`. Calls `lockAllBoards()` at zero or when stopped. | `TimerDisplay.test.tsx`, `TimerDisplay.sync.test.tsx` |
 | `WaitingRoom.tsx` | `WaitingRoom` — waiting room UI. Props: `inviteLink, players, isAdmin, rounds, timeLimitSeconds, maxPlayers, onStart`. Data attrs: `data-testid="copy-link-button"`, `data-testid="qr-code-area"`, `data-testid="config-summary"`, `data-testid="player-list"`, `data-testid="admin-badge"`, `data-testid="start-game-button"`, `data-testid="waiting-message"`. | `WaitingRoom.test.tsx`, `WaitingRoom.realtime.test.tsx` |
 
+### client/src/pages/ — page-level components (tested with Vitest + RTL)
+| File | Exports | Test files |
+|------|---------|------------|
+| `JoinPage.tsx` | `JoinPage` — name entry form + routing. Uses `useParams` for `gameId`, `useNavigate` for routing. Posts to `POST /game/join`; navigates to correct route based on `gameStatus`. Passes `{ state: { deadline } }` when navigating to active game. Data attrs: `data-testid="name-input"`, `data-testid="name-error"`, `data-testid="server-error"`, `data-testid="join-button"`. | `JoinPage.test.tsx`, `GamePage.midRoundJoin.test.tsx` |
+
 ### client/src/store/ — Zustand vanilla stores
 | File | Store | State shape | Key actions |
 |------|-------|-------------|-------------|
 | `boardStore.ts` | `boardStore` | `boards: BoardState[], currentInput: string, submitting: bool, shaking: bool, myScore: number` | `initBoards(words)`, `appendLetter`, `deleteLetter`, `setSubmitting`, `setShaking`, `setMyScore`, `applyAllResults(entries)`, `lockAllBoards()` |
 | `gameStore.ts` | `gameStore` | `players: Player[], gameStatus: string, settings: GameConfig \| null` | `handleGameStateUpdate({ players, status, settings })` |
+
+### server/src/routes/ — HTTP route handlers
+| File | Exports | Purpose |
+|------|---------|---------|
+| `createGame.ts` | `handleCreateGame`, `gameSessions` | `POST /game/create` — creates game, sets admin session cookie |
+| `joinGame.ts` | `handleJoinGame`, `gamePlayers`, `gameDeadlines` | `POST /game/join` — adds player, sets session cookie; returns `{ playerId, gameStatus, deadline? }`. `gamePlayers`: Map of gameId→players. `gameDeadlines`: Map of gameId→deadline (set by round start logic). |
+| `index.ts` | `handleRequest` | Routes `POST /game/create` and `POST /game/join` |
 
 ### client/src/socket/
 | File | Exports | Socket events handled |
@@ -224,3 +237,10 @@ BoardState  = { targetWord: string; attemptCount: number; status: "unsolved"|"so
 | Server → Client | `timer_sync` | `{ deadline: number }` | `app/pages/GamePage.tsx` → `setSyncedDeadline` → passed as prop to `TimerDisplay` |
 | Client → Server | `start_game` | `{ gameId }` | `app/pages/WaitingRoomPage.tsx` → admin Start Game button |
 | Server → Client | `game_state_update` | `{ players: Player[], status: string, settings: GameConfig }` | `app/pages/WaitingRoomPage.tsx` → `gameStore.handleGameStateUpdate` |
+
+## API route reference (current state)
+
+| Method | Path | Handler | Response |
+|--------|------|---------|----------|
+| POST | `/game/create` | `handleCreateGame` | 201: `{ gameId, inviteLink }` + session cookie |
+| POST | `/game/join` | `handleJoinGame` | 200: `{ playerId, gameStatus, deadline? }` + session cookie / 403 / 404 / 409 |

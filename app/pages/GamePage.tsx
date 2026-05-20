@@ -1,4 +1,4 @@
-import { useParams } from "react-router";
+import { useParams, useLocation } from "react-router";
 import AppShell from "../components/layout/AppShell";
 import { BoardGrid } from "client/components/BoardGrid";
 import { TimerDisplay } from "client/components/TimerDisplay";
@@ -18,8 +18,10 @@ const PLACEHOLDER_WORDS = ["apple", "grape", "stone", "light"];
 
 export default function GamePage() {
   const { gameId = "local" } = useParams();
+  const location = useLocation();
+  const joinDeadline = (location.state as { deadline?: number } | null)?.deadline ?? null;
 
-  const [timerDeadline, setTimerDeadline] = useState<number | null>(null);
+  const [timerDeadline, setTimerDeadline] = useState<number | null>(joinDeadline);
   const [syncedDeadline, setSyncedDeadline] = useState<number | undefined>(undefined);
   const [timerStopped, setTimerStopped] = useState(false);
   const [scorePopup, setScorePopup] = useState<{ delta: number; key: number } | null>(null);
