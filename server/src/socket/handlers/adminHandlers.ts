@@ -3,6 +3,7 @@ import { VALID_WORDS } from "../../game/wordList";
 import { startRoundTimer } from "../../game/timer";
 import { buildRoundEndedPayload } from "../../game/roundEnd";
 import { gamePlayers } from "../../routes/joinGame";
+import { selectWords } from "../../game/selectWords";
 
 export type AdminGameState = {
   status: "waiting" | "active" | "between_rounds" | "finished";
@@ -50,20 +51,6 @@ function fireRoundEnded(io: IoLike, gameId: string): void {
   io.to(gameId).emit("round_ended", payload);
 }
 
-function selectRandomWords(count: number, exclude: Set<string>): string[] {
-  const pool = Array.from(VALID_WORDS).filter((w) => !exclude.has(w));
-  const result: string[] = [];
-  const used = new Set<string>();
-  while (result.length < count && pool.length > used.size) {
-    const idx = Math.floor(Math.random() * pool.length);
-    const word = pool[idx];
-    if (word && !used.has(word)) {
-      result.push(word);
-      used.add(word);
-    }
-  }
-  return result;
-}
 
 export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
   const { role } = socket.handshake.auth;
@@ -80,7 +67,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       return;
     }
 
-    const words = selectRandomWords(4, adminGame.usedWords);
+    const words = selectWords(VALID_WORDS, adminGame.usedWords, 4);
     adminGame.currentWords = words;
     words.forEach((w) => adminGame.usedWords.add(w));
     adminGame.status = "active";
@@ -123,7 +110,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       return;
     }
 
-    const words = selectRandomWords(4, adminGame.usedWords);
+    const words = selectWords(VALID_WORDS, adminGame.usedWords, 4);
     adminGame.currentWords = words;
     words.forEach((w) => adminGame.usedWords.add(w));
     adminGame.status = "active";
@@ -208,6 +195,6 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     const adminGame = adminGames.get(gameId);
     if (!adminGame) return;
 
-    adminGame.currentWords = selectRandomWords(4, adminGame.usedWords);
+    adminGame.currentWords = selectWords(VALID_WORDS, adminGame.usedWords, 4);
   });
 }
