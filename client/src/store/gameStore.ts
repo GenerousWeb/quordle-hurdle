@@ -1,11 +1,12 @@
 import { createStore } from "zustand/vanilla";
-import type { GameConfig, Player, RoundSummary } from "shared/types/game";
+import type { GameConfig, LeaderboardEntry, Player, RoundSummary } from "shared/types/game";
 
 type GameStore = {
   players: Player[];
   gameStatus: string;
   settings: GameConfig | null;
   roundSummary: RoundSummary | null;
+  leaderboard: LeaderboardEntry[];
 
   handleGameStateUpdate: (data: {
     players: Player[];
@@ -13,6 +14,7 @@ type GameStore = {
     settings: GameConfig;
   }) => void;
   handleRoundEnded: (data: RoundSummary) => void;
+  handleLeaderboardUpdate: (data: { leaderboard: LeaderboardEntry[] }) => void;
 };
 
 export const gameStore = createStore<GameStore>((set) => ({
@@ -20,6 +22,7 @@ export const gameStore = createStore<GameStore>((set) => ({
   gameStatus: "",
   settings: null,
   roundSummary: null,
+  leaderboard: [],
 
   handleGameStateUpdate: ({ players, status, settings }) => {
     set({ players, gameStatus: status, settings });
@@ -27,6 +30,10 @@ export const gameStore = createStore<GameStore>((set) => ({
 
   handleRoundEnded: (data) => {
     set({ roundSummary: data, gameStatus: "between_rounds" });
+  },
+
+  handleLeaderboardUpdate: ({ leaderboard }) => {
+    set({ leaderboard });
   },
 }));
 

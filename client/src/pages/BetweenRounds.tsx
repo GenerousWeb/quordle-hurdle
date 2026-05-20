@@ -1,4 +1,5 @@
 import type { RoundSummary } from "shared/types/game";
+import { LeaderboardTable } from "../components/LeaderboardTable";
 
 type BetweenRoundsProps = {
   roundSummary: RoundSummary;
@@ -18,7 +19,6 @@ export function BetweenRounds({
   onEndGame,
 }: BetweenRoundsProps) {
   const { roundNumber, words, leaderboard } = roundSummary;
-  const sorted = [...leaderboard].sort((a, b) => b.totalScore - a.totalScore);
 
   return (
     <div>
@@ -33,32 +33,7 @@ export function BetweenRounds({
         ))}
       </div>
 
-      <table data-testid="leaderboard" className="w-full mt-6">
-        <thead>
-          <tr>
-            <th>Rank</th>
-            <th>Name</th>
-            <th>Round</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((entry, rank) => (
-            <tr
-              key={entry.playerId}
-              data-testid="leaderboard-row"
-              data-player-id={entry.playerId}
-              data-highlighted={entry.playerId === myPlayerId ? "true" : undefined}
-              className={entry.playerId === myPlayerId ? "font-bold bg-yellow-50" : ""}
-            >
-              <td>{rank + 1}</td>
-              <td>{entry.name}</td>
-              <td>+{entry.roundScore}</td>
-              <td>{entry.totalScore}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <LeaderboardTable entries={leaderboard} myPlayerId={myPlayerId} />
 
       <div className="mt-6">
         {isAdmin ? (

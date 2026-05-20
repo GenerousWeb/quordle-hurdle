@@ -3,7 +3,9 @@ import AppShell from "../components/layout/AppShell";
 import { BoardGrid } from "client/components/BoardGrid";
 import { TimerDisplay } from "client/components/TimerDisplay";
 import { ScorePopup } from "client/components/ScorePopup";
+import { PlayerDot } from "client/components/PlayerDot";
 import { boardStore } from "client/store/boardStore";
+import { gameStore } from "client/store/gameStore";
 import { useGameSocket } from "client/socket/useGameSocket";
 import { useEffect, useState } from "react";
 import { useStore } from "zustand";
@@ -26,6 +28,7 @@ export default function GamePage() {
   const [timerStopped, setTimerStopped] = useState(false);
   const [scorePopup, setScorePopup] = useState<{ delta: number; key: number } | null>(null);
   const myScore = useStore(boardStore, (s) => s.myScore);
+  const leaderboard = useStore(gameStore, (s) => s.leaderboard);
 
   // Seed boards locally until round_started event arrives from server
   useEffect(() => {
@@ -66,7 +69,8 @@ export default function GamePage() {
 
     socket.on(
       "leaderboard_update",
-      (data: { leaderboard: Array<{ playerId: string; score: number }> }) => {
+      (data: { leaderboard: Array<{ playerId: string; name: string; score: number; boardsSolved: number }> }) => {
+        gameStore.getState().handleLeaderboardUpdate(data);
         const entry = data.leaderboard.find(
           (p) => p.playerId === PLACEHOLDER_PLAYER_ID,
         );
@@ -101,6 +105,18 @@ export default function GamePage() {
             <span data-testid="nav-score" className="text-white font-semibold">
               {myScore}
             </span>
+          </div>
+        )}
+        {leaderboard.length > 0 && (
+          <div className="mb-4 flex items-center gap-3" data-testid="nav-player-dots">
+            {leaderboard.map((entry) => (
+              <PlayerDot
+                key={entry.playerId}
+                name={entry.name}
+                score={entry.score}
+                isMe={entry.playerId === PLACEHOLDER_PLAYER_ID}
+              />
+            ))}
           </div>
         )}
         <BoardGrid onEnter={handleEnter} />
