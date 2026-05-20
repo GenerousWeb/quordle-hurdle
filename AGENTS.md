@@ -133,17 +133,22 @@ quordle-hurdle/
 | `TimerDisplay.tsx` | `TimerDisplay` — countdown timer. Props: `deadline: number, syncedDeadline?: number, stopped?: boolean`. Data attrs: `data-testid="timer-display"`, `data-urgent="true\|false"`. Calls `lockAllBoards()` at zero or when stopped. | `TimerDisplay.test.tsx`, `TimerDisplay.sync.test.tsx` |
 | `WaitingRoom.tsx` | `WaitingRoom` — waiting room UI. Props: `inviteLink, players, isAdmin, rounds, timeLimitSeconds, maxPlayers, onStart`. Data attrs: `data-testid="copy-link-button"`, `data-testid="qr-code-area"`, `data-testid="config-summary"`, `data-testid="player-list"`, `data-testid="admin-badge"`, `data-testid="start-game-button"`, `data-testid="waiting-message"`. | `WaitingRoom.test.tsx`, `WaitingRoom.realtime.test.tsx` |
 | `AdminControls.tsx` | `AdminControls` — contextual admin action buttons. Props: `isAdmin, status, players, onStartGame?, onStartNextRound?, onEndGame?, onRestartGame?, onShuffleWords?`. Renders: Start Game (`data-testid="admin-start-game"`) in `waiting`; Start Next Round (`data-testid="admin-start-next-round"`) + End Game (`data-testid="admin-end-game"`) in `between_rounds`; Play Again (`data-testid="admin-play-again"`) in `finished`; waiting message (`data-testid="admin-waiting-message"`) for non-admin in `waiting`. Start Game disabled when `players.length === 0`. | `AdminControls.test.tsx` |
+| `PlayerDot.tsx` | `PlayerDot` — player avatar with score badge. Props: `name, score, isMe`. Data attrs: `data-me="true"` (self), `data-testid="player-score-badge"` (score). | `PlayerDot.test.tsx`, `NavBar.leaderboard.test.tsx` |
+| `LeaderboardTable.tsx` | `LeaderboardTable` — ranked table sorted by totalScore desc. Props: `entries: { playerId, name, roundScore, totalScore }[], myPlayerId`. Data attrs: `data-testid="leaderboard-row"`, `data-player-id`, `data-highlighted="true"` (self). Round score shown with `+` prefix. | `LeaderboardTable.test.tsx` |
+| `Podium.tsx` | `Podium` — top 3 podium slots. Props: `entries: PodiumEntry[]`. Data attrs: `data-testid="podium-slot"`, `data-rank="1\|2\|3"`. Renders only as many slots as entries (min 1, max 3). 1st has distinct styling. | `Podium.test.tsx` |
 
 ### client/src/pages/ — page-level components (tested with Vitest + RTL)
 | File | Exports | Test files |
 |------|---------|------------|
 | `JoinPage.tsx` | `JoinPage` — name entry form + routing. Uses `useParams` for `gameId`, `useNavigate` for routing. Posts to `POST /game/join`; navigates to correct route based on `gameStatus`. Passes `{ state: { deadline } }` when navigating to active game. Data attrs: `data-testid="name-input"`, `data-testid="name-error"`, `data-testid="server-error"`, `data-testid="join-button"`. | `JoinPage.test.tsx`, `GamePage.midRoundJoin.test.tsx` |
+| `BetweenRounds.tsx` | `BetweenRounds` — round summary screen. Props: `roundSummary, myPlayerId, isAdmin, isLastRound, onStartNextRound?, onEndGame?`. Uses `LeaderboardTable` for scores. Data attrs: `data-testid="word-grid"`, `data-testid="word-card"`, `data-testid="start-next-round-button"`, `data-testid="end-game-button"`, `data-testid="waiting-message"`. | `BetweenRounds.test.tsx` |
+| `EndGame.tsx` | `EndGame` — end-of-game screen. Props: `podium: PodiumEntry[], finalLeaderboard: LeaderboardEntry[], myPlayerId, isAdmin, onRestartGame?`. Renders `<Podium>` and `<LeaderboardTable>`. Data attrs: `data-testid="play-again-button"` (admin only). | — |
 
 ### client/src/store/ — Zustand vanilla stores
 | File | Store | State shape | Key actions |
 |------|-------|-------------|-------------|
 | `boardStore.ts` | `boardStore` | `boards: BoardState[], currentInput: string, submitting: bool, shaking: bool, myScore: number` | `initBoards(words)`, `appendLetter`, `deleteLetter`, `setSubmitting`, `setShaking`, `setMyScore`, `applyAllResults(entries)`, `lockAllBoards()` |
-| `gameStore.ts` | `gameStore` | `players: Player[], gameStatus: string, settings: GameConfig \| null` | `handleGameStateUpdate({ players, status, settings })` |
+| `gameStore.ts` | `gameStore` | `players: Player[], gameStatus: string, settings: GameConfig \| null, roundSummary: RoundSummary \| null, leaderboard: LeaderboardEntry[]` | `handleGameStateUpdate({ players, status, settings })`, `handleRoundEnded(RoundSummary)`, `handleLeaderboardUpdate({ leaderboard })` |
 
 ### server/src/routes/ — HTTP route handlers
 | File | Exports | Purpose |
@@ -169,13 +174,16 @@ quordle-hurdle/
 
 ### shared/types/game.ts
 ```typescript
-TileResult  = "green" | "yellow" | "grey"
-TileState   = "empty" | "typing" | "green" | "yellow" | "grey"
-BoardStatus = "unsolved" | "solved" | "failed" | "locked"
-GuessRow    = { word: string; result: TileResult[] }
-BoardState  = { status: BoardStatus; targetWord: string | null; guesses: GuessRow[] }
-GameConfig  = { maxPlayers: number; rounds: number; timeLimitSeconds: number }
-Player      = { playerId: string; name: string; role: "admin" | "player"; isConnected: boolean }
+TileResult      = "green" | "yellow" | "grey"
+TileState       = "empty" | "typing" | "green" | "yellow" | "grey"
+BoardStatus     = "unsolved" | "solved" | "failed" | "locked"
+GuessRow        = { word: string; result: TileResult[] }
+BoardState      = { status: BoardStatus; targetWord: string | null; guesses: GuessRow[] }
+GameConfig      = { maxPlayers: number; rounds: number; timeLimitSeconds: number }
+Player          = { playerId: string; name: string; role: "admin" | "player"; isConnected: boolean }
+RoundSummary    = { roundNumber: number; words: string[]; leaderboard: Array<{ playerId, name, roundScore, totalScore }> }
+LeaderboardEntry = { playerId: string; name: string; score: number; boardsSolved: number }
+PodiumEntry     = { rank: number; name: string; score: number }
 ```
 
 # Test infrastructure

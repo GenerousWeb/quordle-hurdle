@@ -38,3 +38,16 @@ export type RoundSummary = {
     totalScore: number;
   }>;
 };
+
+export type LeaderboardEntry = {
+  playerId: string;
+  name: string;
+  score: number;
+  boardsSolved: number;
+};
+
+export type PodiumEntry = {
+  rank: number;
+  name: string;
+  score: number;
+};
