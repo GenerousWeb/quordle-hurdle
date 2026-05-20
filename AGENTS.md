@@ -2,6 +2,7 @@
 - Prefer simple solutions over clever ones.
 - Write code that is clear and self-explainatory.
 - Build with long term in mind.
+
   
 # After every change
 Run these three commands after every code change and fix any failures before considering the task done:
@@ -60,3 +61,159 @@ When tests cover a component API that does not exist yet, cast the component to 
 const F2Tile = Tile as any;
 ```
 The tests will fail at assertion level (not compilation) until the implementation lands. This keeps `npm run typecheck:all` green while the test suite is red.
+
+---
+
+# Codebase map
+
+## Hard constraints
+- Do not add any imports not listed in this prompt or the feature file
+- Do not create files not listed in the file list below
+- Do not install new npm packages
+- Do not read or modify any existing file except those listed under "files to create or edit"
+- If something is unclear, stop and ask — do not assume
+
+> **Maintenance rule:** After every feature implementation, update the file list, exports, socket events, and store shapes below to reflect the new state of the codebase. Do NOT read the project tree at the start of a new feature — use this map instead.
+
+## Monorepo layout
+
+```
+quordle-hurdle/
+├── app/                        React Router SSR app (pages + layout)
+├── client/src/                 Shared client code (components, stores, socket)
+├── server/src/                 Socket.io game server
+├── shared/types/               Types shared across client and server
+├── md-files/                   Feature spec files (featureN.md)
+├── tsconfig.json               Root — paths for app/ (see aliases below)
+├── package.json                Root — runs typecheck:all, lint, test across all workspaces
+├── client/package.json         Client workspace — vitest, react, testing-library
+└── server/package.json         Server workspace — socket.io (+ ioredis when added)
+```
+
+## Import path aliases
+
+### Root tsconfig.json (used by app/)
+```
+"shared/*"             → ./shared/*
+"client/components/*"  → ./client/src/components/*
+"client/store/*"       → ./client/src/store/*
+"client/socket/*"      → ./client/src/socket/*
+```
+
+### client/tsconfig.json (used by client/src/)
+```
+"shared/*"             → ../shared/*
+```
+
+### server/tsconfig.json (used by server/src/)
+```
+"shared/*"             → ../shared/*
+```
+
+# Project context
+
+## Key source files
+
+### app/ — pages and layout
+| File | Purpose |
+|------|---------|
+| `app/routes.ts` | Route config: `/` HomePage, `/wait/:gameId` WaitingRoomPage, `/play/:gameId` GamePage, `/between/:gameId` BetweenRoundsPage, `/end/:gameId` EndGamePage |
+| `app/components/layout/AppShell.tsx` | Wraps every page: `<NavBar /> + <main> + <Footer />` |
+| `app/components/layout/NavBar.tsx` | Fixed top nav bar (logo + nav links). **Extend here to add timer display.** |
+| `app/components/layout/Footer.tsx` | Static footer |
+| `app/pages/GamePage.tsx` | Active game page. Uses `useGameSocket`, renders `<BoardGrid onEnter>` inside `<AppShell>`. Seeds boards locally on mount as placeholder. |
+
+### client/src/components/ — React components (tested with Vitest + RTL)
+| File | Exports | Test files |
+|------|---------|------------|
+| `Tile.tsx` | `Tile` — single letter tile. Props: `letter, state, flipping, flipMid, shaking`. Data attrs: `data-state`, `data-flipping`, `data-flip-mid`, `data-shaking`, `data-result`. | `Tile.test.tsx`, `Tile.animation.test.tsx` |
+| `BoardGrid.tsx` | `BoardGrid` — 4-board grid. Props: `onEnter?`. Reads `boardStore`. Data attrs: `data-board-index`, `data-status`, `data-row-index`, `data-tile-index`, `data-reveal-row`. | `BoardGrid.test.tsx`, `BoardGrid.flip.test.tsx`, `BoardGrid.shake.test.tsx`, `BoardGrid.errors.test.tsx`, `BoardGrid.staticStates.test.tsx`, `BoardGrid.timerLock.test.tsx` |
+| `TimerDisplay.tsx` | `TimerDisplay` — countdown timer. Props: `deadline: number, syncedDeadline?: number, stopped?: boolean`. Data attrs: `data-testid="timer-display"`, `data-urgent="true\|false"`. Calls `lockAllBoards()` at zero or when stopped. | `TimerDisplay.test.tsx`, `TimerDisplay.sync.test.tsx` |
+
+### client/src/store/ — Zustand vanilla stores
+| File | Store | State shape | Key actions |
+|------|-------|-------------|-------------|
+| `boardStore.ts` | `boardStore` | `boards: BoardState[], currentInput: string, submitting: bool, shaking: bool` | `initBoards(words)`, `appendLetter`, `deleteLetter`, `setSubmitting`, `setShaking`, `applyAllResults(entries)`, `lockAllBoards()` |
+
+### client/src/socket/
+| File | Exports | Socket events handled |
+|------|---------|----------------------|
+| `useGameSocket.ts` | `useGameSocket({ gameId, roundNumber, playerId, serverUrl })` → `{ handleEnter }` | **In:** `round_started({ words })`, `guess_result`, `round_ended`. **Out:** `join_game`, `submit_guess` |
+
+### server/src/ — Socket.io server
+| File | Exports | Purpose |
+|------|---------|---------|
+| `index.ts` | `io`, `games` | Server entry. Handles: `join_game`, `submit_guess`. Emits: `guess_result`, `leaderboard_update`. |
+| `game/submitGuess.ts` | `handleSubmitGuess`, `games` (Map), types: `GameState`, `PlayerState`, `BoardState`, `GuessResultSuccess`, `GuessResultError` | Pure guess handler. `GameState` has `status, roundNumber, deadline, players`. |
+| `game/matchGuess.ts` | `matchGuess(guess, target)` → `TileResult[]` | Wordle-style tile scoring. |
+| `game/wordList.ts` | `VALID_WORDS: Set<string>` | Valid 5-letter word list. |
+| `game/timer.ts` | `startRoundTimer(io, gameId, deadline)`, `stopRoundTimer(gameId)` | Server-side round timer. Fires `round_ended` at deadline via setTimeout; emits `timer_sync` every 60s via setInterval. Tracks active timers in an in-memory Map. |
+
+### shared/types/game.ts
+```typescript
+TileResult  = "green" | "yellow" | "grey"
+TileState   = "empty" | "typing" | "green" | "yellow" | "grey"
+BoardStatus = "unsolved" | "solved" | "failed" | "locked"
+GuessRow    = { word: string; result: TileResult[] }
+BoardState  = { status: BoardStatus; targetWord: string | null; guesses: GuessRow[] }
+```
+
+# Test infrastructure
+
+## Implementation sequence — follow strictly
+
+Phase 1: Write all tests first
+  - Create every test file listed in the Test Plan
+  - Write every test case from the test plan tables
+  - Run the tests: npx vitest run
+  - All tests must FAIL at this point (red phase)
+  - Do NOT write any implementation code during Phase 1
+
+Phase 2: Implement Step 1 only
+  - Write the minimum code to make Step 1 tests pass
+  - Run: npx vitest run
+  - All Step 1 tests must PASS; Step 2 tests still fail
+  - Stop and report results before continuing
+
+Phase 3: Implement Step 2 only
+  - Write minimum code to make Step 2 tests pass
+  - Run: npx vitest run
+  - All tests must PASS
+  - Stop and report results
+
+| Workspace | Runner | Config | Setup file | Environment |
+|-----------|--------|--------|------------|-------------|
+| `client/` | `vitest run` | `client/vitest.config.ts` | `client/vitest.setup.ts` (imports `@testing-library/jest-dom/vitest`, runs `cleanup()` after each) | `happy-dom` (per file via `@vitest-environment happy-dom` docstring) or `node` |
+| `server/` | `vitest run` | `server/vitest.config.ts` | none | `node` |
+
+**Root scripts (run from repo root):**
+```
+npm run typecheck:all   → tsc --noEmit in app, client, server
+npm run lint            → eslint across app, client, server
+npm test                → vitest run in client + server
+```
+
+## Server GameState shape (in-memory, server/src/game/submitGuess.ts)
+```typescript
+GameState = {
+  status: "waiting" | "active" | "ended"
+  roundNumber: number
+  deadline: number          // Unix timestamp ms
+  players: Map<string, PlayerState>
+}
+PlayerState = { score: number; boards: BoardState[] }
+BoardState  = { targetWord: string; attemptCount: number; status: "unsolved"|"solved"|"failed" }
+```
+
+## Socket event reference (current state)
+
+| Direction | Event | Payload | Handler location |
+|-----------|-------|---------|-----------------|
+| Client → Server | `join_game` | `{ gameId }` | `server/src/index.ts` |
+| Client → Server | `submit_guess` | `{ gameId, roundNumber, guess }` | `server/src/index.ts` → `handleSubmitGuess` |
+| Server → Client | `guess_result` | `GuessResultSuccess \| GuessResultError` | `client/src/socket/useGameSocket.ts` |
+| Server → Client | `leaderboard_update` | `{ leaderboard: [{playerId, score, boardsSolved}] }` | (not yet consumed client-side) |
+| Server → Client | `round_started` | `{ words: string[] }` | `client/src/socket/useGameSocket.ts` → `initBoards` |
+| Server → Client | `round_ended` | (none) | `client/src/socket/useGameSocket.ts` → `lockAllBoards`; `app/pages/GamePage.tsx` → `setTimerStopped(true)` |
+| Server → Client | `round_started` | `{ words: string[], startTime: number, deadline: number, timeLimitSeconds: number }` | `client/src/socket/useGameSocket.ts` → `initBoards`; `app/pages/GamePage.tsx` → `setTimerDeadline` |
+| Server → Client | `timer_sync` | `{ deadline: number }` | `app/pages/GamePage.tsx` → `setSyncedDeadline` → passed as prop to `TimerDisplay` |
