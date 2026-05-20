@@ -122,6 +122,7 @@ quordle-hurdle/
 | `app/components/layout/NavBar.tsx` | Fixed top nav bar (logo + nav links). **Extend here to add timer display.** |
 | `app/components/layout/Footer.tsx` | Static footer |
 | `app/pages/GamePage.tsx` | Active game page. Uses `useGameSocket`, renders `<BoardGrid onEnter>` inside `<AppShell>`. Seeds boards locally on mount as placeholder. |
+| `app/pages/WaitingRoomPage.tsx` | Waiting room page (`/wait/:gameId`). Mounts `<WaitingRoom>`. Connects socket, emits `join_game`, handles `game_state_update` → `gameStore`. Emits `start_game` on admin button click. |
 
 ### client/src/components/ — React components (tested with Vitest + RTL)
 | File | Exports | Test files |
@@ -129,11 +130,13 @@ quordle-hurdle/
 | `Tile.tsx` | `Tile` — single letter tile. Props: `letter, state, flipping, flipMid, shaking`. Data attrs: `data-state`, `data-flipping`, `data-flip-mid`, `data-shaking`, `data-result`. | `Tile.test.tsx`, `Tile.animation.test.tsx` |
 | `BoardGrid.tsx` | `BoardGrid` — 4-board grid. Props: `onEnter?`. Reads `boardStore`. Data attrs: `data-board-index`, `data-status`, `data-row-index`, `data-tile-index`, `data-reveal-row`. | `BoardGrid.test.tsx`, `BoardGrid.flip.test.tsx`, `BoardGrid.shake.test.tsx`, `BoardGrid.errors.test.tsx`, `BoardGrid.staticStates.test.tsx`, `BoardGrid.timerLock.test.tsx` |
 | `TimerDisplay.tsx` | `TimerDisplay` — countdown timer. Props: `deadline: number, syncedDeadline?: number, stopped?: boolean`. Data attrs: `data-testid="timer-display"`, `data-urgent="true\|false"`. Calls `lockAllBoards()` at zero or when stopped. | `TimerDisplay.test.tsx`, `TimerDisplay.sync.test.tsx` |
+| `WaitingRoom.tsx` | `WaitingRoom` — waiting room UI. Props: `inviteLink, players, isAdmin, rounds, timeLimitSeconds, maxPlayers, onStart`. Data attrs: `data-testid="copy-link-button"`, `data-testid="qr-code-area"`, `data-testid="config-summary"`, `data-testid="player-list"`, `data-testid="admin-badge"`, `data-testid="start-game-button"`, `data-testid="waiting-message"`. | `WaitingRoom.test.tsx`, `WaitingRoom.realtime.test.tsx` |
 
 ### client/src/store/ — Zustand vanilla stores
 | File | Store | State shape | Key actions |
 |------|-------|-------------|-------------|
-| `boardStore.ts` | `boardStore` | `boards: BoardState[], currentInput: string, submitting: bool, shaking: bool` | `initBoards(words)`, `appendLetter`, `deleteLetter`, `setSubmitting`, `setShaking`, `applyAllResults(entries)`, `lockAllBoards()` |
+| `boardStore.ts` | `boardStore` | `boards: BoardState[], currentInput: string, submitting: bool, shaking: bool, myScore: number` | `initBoards(words)`, `appendLetter`, `deleteLetter`, `setSubmitting`, `setShaking`, `setMyScore`, `applyAllResults(entries)`, `lockAllBoards()` |
+| `gameStore.ts` | `gameStore` | `players: Player[], gameStatus: string, settings: GameConfig \| null` | `handleGameStateUpdate({ players, status, settings })` |
 
 ### client/src/socket/
 | File | Exports | Socket events handled |
@@ -156,6 +159,8 @@ TileState   = "empty" | "typing" | "green" | "yellow" | "grey"
 BoardStatus = "unsolved" | "solved" | "failed" | "locked"
 GuessRow    = { word: string; result: TileResult[] }
 BoardState  = { status: BoardStatus; targetWord: string | null; guesses: GuessRow[] }
+GameConfig  = { maxPlayers: number; rounds: number; timeLimitSeconds: number }
+Player      = { playerId: string; name: string; role: "admin" | "player"; isConnected: boolean }
 ```
 
 # Test infrastructure
@@ -217,3 +222,5 @@ BoardState  = { targetWord: string; attemptCount: number; status: "unsolved"|"so
 | Server → Client | `round_ended` | (none) | `client/src/socket/useGameSocket.ts` → `lockAllBoards`; `app/pages/GamePage.tsx` → `setTimerStopped(true)` |
 | Server → Client | `round_started` | `{ words: string[], startTime: number, deadline: number, timeLimitSeconds: number }` | `client/src/socket/useGameSocket.ts` → `initBoards`; `app/pages/GamePage.tsx` → `setTimerDeadline` |
 | Server → Client | `timer_sync` | `{ deadline: number }` | `app/pages/GamePage.tsx` → `setSyncedDeadline` → passed as prop to `TimerDisplay` |
+| Client → Server | `start_game` | `{ gameId }` | `app/pages/WaitingRoomPage.tsx` → admin Start Game button |
+| Server → Client | `game_state_update` | `{ players: Player[], status: string, settings: GameConfig }` | `app/pages/WaitingRoomPage.tsx` → `gameStore.handleGameStateUpdate` |

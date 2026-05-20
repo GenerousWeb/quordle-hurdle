@@ -4,6 +4,13 @@ export type GameConfig = {
   timeLimitSeconds: number;
 };
 
+export type Player = {
+  playerId: string;
+  name: string;
+  role: "admin" | "player";
+  isConnected: boolean;
+};
+
 export type TileResult = "green" | "yellow" | "grey";
 
 export type TileState = "empty" | "typing" | "green" | "yellow" | "grey";
