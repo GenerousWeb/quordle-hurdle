@@ -119,7 +119,7 @@ export function BoardGrid({ onEnter }: BoardGridProps = {}) {
   }, [onEnter]);
 
   return (
-    <div className="grid grid-cols-2 gap-4 p-4">
+    <div className="grid grid-cols-2 gap-10 p-6">
       {boards.map((board, boardIndex) => {
         // During animation, defer solved/failed status so the highlight only
         // appears after the flip completes.
