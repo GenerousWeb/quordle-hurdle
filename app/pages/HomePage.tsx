@@ -1,7 +1,11 @@
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router";
 import AppShell from "../components/layout/AppShell";
 
+const SERVER_URL = "http://localhost:3001";
+
 export default function HomePage() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     playerName: "",
     maxPlayers: 10,
@@ -10,6 +14,7 @@ export default function HomePage() {
   });
 
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,7 +40,7 @@ export default function HomePage() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!formData.playerName.trim()) {
@@ -43,7 +48,30 @@ export default function HomePage() {
       return;
     }
 
-    console.log(JSON.stringify(formData, null, 2));
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${SERVER_URL}/game/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminName: formData.playerName,
+          maxPlayers: formData.maxPlayers,
+          rounds: formData.numRounds,
+          timeLimitSeconds: parseInt(formData.timePerRound),
+        }),
+      });
+      const data = await res.json() as { gameId?: string; playerId?: string; error?: string };
+      if (!res.ok || !data.gameId || !data.playerId) {
+        setError(data.error ?? "Failed to create game");
+        return;
+      }
+      void navigate(`/wait/${data.gameId}`, { state: { playerId: data.playerId } });
+    } catch {
+      setError("Could not connect to server");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const scrollToForm = () => {
@@ -55,7 +83,7 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="w-full min-h-[calc(100vh-56px)] flex items-center justify-center px-4 py-16">
         <div className="text-center space-y-6">
-          <h1 className="font-mono text-4xl md:text-6xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          <h1 className="font-mono text-4xl md:text-6xl font-bold bg-linear-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
             quordle//
           </h1>
           <p className="text-gray-400 text-lg">
@@ -63,7 +91,7 @@ export default function HomePage() {
           </p>
           <button
             onClick={scrollToForm}
-            className="mt-8 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-medium rounded-lg transition-all"
+            className="mt-8 px-6 py-3 bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-medium rounded-lg transition-all"
           >
             Create a game
           </button>
@@ -169,9 +197,10 @@ export default function HomePage() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 mt-6 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-medium rounded-lg transition-all"
+              disabled={loading}
+              className="w-full py-3 mt-6 bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all"
             >
-              Create game →
+              {loading ? "Creating…" : "Create game →"}
             </button>
           </form>
         </div>

@@ -13,13 +13,14 @@ describe("POST /game/create handler", () => {
     gameSessions.clear();
   });
 
-  it("11: valid body returns status 201 with gameId and inviteLink", () => {
+  it("11: valid body returns status 201 with gameId and playerId", () => {
     const result = handleCreateGame(validBody);
     expect(result.status).toBe(201);
     if (result.status !== 201) return;
     expect(result.body.gameId).toBeDefined();
     expect(typeof result.body.gameId).toBe("string");
-    expect(result.body.inviteLink).toContain(result.body.gameId);
+    expect(result.body.playerId).toBeDefined();
+    expect(typeof result.body.playerId).toBe("string");
   });
 
   it("12: two requests produce different gameIds", () => {

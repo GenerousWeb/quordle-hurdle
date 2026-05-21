@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { gameSessions } from "./createGame";
 
-type PlayerRecord = { name: string; isConnected: boolean };
+type PlayerRecord = { name: string; isConnected: boolean; role: "admin" | "player" };
 
 // Players who have joined via POST /game/join, keyed by gameId → playerId → record
 export const gamePlayers = new Map<string, Map<string, PlayerRecord>>();
@@ -26,12 +26,16 @@ type JoinResult =
 
 function buildGameStateUpdate(gameId: string) {
   const players = gamePlayers.get(gameId) ?? new Map<string, PlayerRecord>();
+  const session = gameSessions.get(gameId);
   return {
     players: Array.from(players.entries()).map(([pid, p]) => ({
       playerId: pid,
       name: p.name,
       isConnected: p.isConnected,
+      role: p.role,
     })),
+    status: session?.status ?? "waiting",
+    settings: session?.config ?? { maxPlayers: 10, rounds: 3, timeLimitSeconds: 120 },
   };
 }
 
@@ -104,13 +108,12 @@ export function handleJoinGame(body: JoinBody, existingPlayerId?: string): JoinR
   }
   const players = gamePlayers.get(gameId)!;
 
-  // Admin occupies one slot; game is full when admin + joiners >= maxPlayers
-  if (players.size + 1 >= session.config.maxPlayers) {
+  if (players.size >= session.config.maxPlayers) {
     return { status: 403, body: { error: "game_full" } };
   }
 
   const playerId = randomUUID();
-  players.set(playerId, { name: playerName.trim(), isConnected: true });
+  players.set(playerId, { name: playerName.trim(), isConnected: true, role: "player" });
 
   const sessionPayload = JSON.stringify({ playerId, gameId });
   const cookie = `session=${encodeURIComponent(sessionPayload)}; HttpOnly; Path=/; SameSite=Lax`;

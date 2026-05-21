@@ -132,7 +132,8 @@ quordle-hurdle/
 | `BoardGrid.tsx` | `BoardGrid` — 4-board grid. Props: `onEnter?`. Reads `boardStore`. Data attrs: `data-board-index`, `data-status`, `data-row-index`, `data-tile-index`, `data-reveal-row`. | `BoardGrid.test.tsx`, `BoardGrid.flip.test.tsx`, `BoardGrid.shake.test.tsx`, `BoardGrid.errors.test.tsx`, `BoardGrid.staticStates.test.tsx`, `BoardGrid.timerLock.test.tsx` |
 | `TimerDisplay.tsx` | `TimerDisplay` — countdown timer. Props: `deadline: number, syncedDeadline?: number, stopped?: boolean`. Data attrs: `data-testid="timer-display"`, `data-urgent="true\|false"`. Calls `lockAllBoards()` at zero or when stopped. | `TimerDisplay.test.tsx`, `TimerDisplay.sync.test.tsx` |
 | `WaitingRoom.tsx` | `WaitingRoom` — waiting room UI. Props: `inviteLink, players, isAdmin, rounds, timeLimitSeconds, maxPlayers, onStart`. Data attrs: `data-testid="copy-link-button"`, `data-testid="qr-code-area"`, `data-testid="config-summary"`, `data-testid="player-list"`, `data-testid="admin-badge"`, `data-testid="start-game-button"`, `data-testid="waiting-message"`. | `WaitingRoom.test.tsx`, `WaitingRoom.realtime.test.tsx` |
-| `AdminControls.tsx` | `AdminControls` — contextual admin action buttons. Props: `isAdmin, status, players, onStartGame?, onStartNextRound?, onEndGame?, onRestartGame?, onShuffleWords?`. Renders: Start Game (`data-testid="admin-start-game"`) in `waiting`; Start Next Round (`data-testid="admin-start-next-round"`) + End Game (`data-testid="admin-end-game"`) in `between_rounds`; Play Again (`data-testid="admin-play-again"`) in `finished`; waiting message (`data-testid="admin-waiting-message"`) for non-admin in `waiting`. Start Game disabled when `players.length === 0`. | `AdminControls.test.tsx` |
+| `AdminControls.tsx` | `AdminControls` — contextual admin action buttons. Props: `isAdmin, status, players, onStartGame?, onStartNextRound?, onEndGame?, onRestartGame?, onShuffleWords?`. Renders: Start Game (`data-testid="admin-start-game"`) in `waiting`; Start Next Round (`data-testid="admin-start-next-round"`) + End Game (`data-testid="admin-end-game"`) in `between_rounds`; Play Again (`data-testid="admin-play-again"`) in `finished`; waiting message (`data-testid="admin-waiting-message"`) for non-admin in `waiting`. Start Game disabled when `players.length === 0`. | `AdminControls.test.tsx`, `AdminControls.promotion.test.tsx` |
+| `AdminTransferNotification.tsx` | `AdminTransferNotification` — toast banner for admin transfer. Props: `message: string \| null`. Shows "{name} is now the admin"; auto-dismisses after 3s. Data attrs: `data-testid="admin-transfer-notification"`. | `AdminTransfer.test.tsx` |
 | `PlayerDot.tsx` | `PlayerDot` — player avatar with score badge. Props: `name, score, isMe`. Data attrs: `data-me="true"` (self), `data-testid="player-score-badge"` (score). | `PlayerDot.test.tsx`, `NavBar.leaderboard.test.tsx` |
 | `LeaderboardTable.tsx` | `LeaderboardTable` — ranked table sorted by totalScore desc. Props: `entries: { playerId, name, roundScore, totalScore }[], myPlayerId`. Data attrs: `data-testid="leaderboard-row"`, `data-player-id`, `data-highlighted="true"` (self). Round score shown with `+` prefix. | `LeaderboardTable.test.tsx` |
 | `Podium.tsx` | `Podium` — top 3 podium slots. Props: `entries: PodiumEntry[]`. Data attrs: `data-testid="podium-slot"`, `data-rank="1\|2\|3"`. Renders only as many slots as entries (min 1, max 3). 1st has distinct styling. | `Podium.test.tsx` |
@@ -148,7 +149,7 @@ quordle-hurdle/
 | File | Store | State shape | Key actions |
 |------|-------|-------------|-------------|
 | `boardStore.ts` | `boardStore` | `boards: BoardState[], currentInput: string, submitting: bool, shaking: bool, myScore: number` | `initBoards(words)`, `appendLetter`, `deleteLetter`, `setSubmitting`, `setShaking`, `setMyScore`, `applyAllResults(entries)`, `lockAllBoards()` |
-| `gameStore.ts` | `gameStore` | `players: Player[], gameStatus: string, settings: GameConfig \| null, roundSummary: RoundSummary \| null, leaderboard: LeaderboardEntry[]` | `handleGameStateUpdate({ players, status, settings })`, `handleRoundEnded(RoundSummary)`, `handleLeaderboardUpdate({ leaderboard })` |
+| `gameStore.ts` | `gameStore` | `players: Player[], gameStatus: string, settings: GameConfig \| null, roundSummary: RoundSummary \| null, leaderboard: LeaderboardEntry[], endGameData: EndGameData \| null, adminId: string \| null, myPlayerId: string \| null, adminTransferMessage: string \| null` | `handleGameStateUpdate({ players, status, settings })`, `handleRoundEnded(RoundSummary)`, `handleLeaderboardUpdate({ leaderboard })`, `handleGameEnded(EndGameData)`, `handleAdminTransferred({ newAdminId, newAdminName })` — `isAdmin` is derived as `myPlayerId === adminId` |
 
 ### server/src/routes/ — HTTP route handlers
 | File | Exports | Purpose |
@@ -171,6 +172,7 @@ quordle-hurdle/
 | `game/matchGuess.ts` | `matchGuess(guess, target)` → `TileResult[]` | Wordle-style tile scoring. |
 | `game/wordList.ts` | `VALID_WORDS: Set<string>` | Valid 5-letter word list. |
 | `game/timer.ts` | `startRoundTimer(io, gameId, deadline)`, `stopRoundTimer(gameId)` | Server-side round timer. Fires `round_ended` at deadline via setTimeout; emits `timer_sync` every 60s via setInterval. Tracks active timers in an in-memory Map. |
+| `game/adminPromotion.ts` | `selectNextAdmin(players, currentAdminId)`, `handleAdminDisconnect(io, gameId, disconnectingPlayerId, currentAdminId, players, updateAdminId)` | Pure admin promotion logic. Selects oldest-joined connected player as new admin on disconnect. |
 
 ### shared/types/game.ts
 ```typescript
@@ -252,6 +254,7 @@ BoardState  = { targetWord: string; attemptCount: number; status: "unsolved"|"so
 | Client → Server | `shuffle_words` | `{ gameId }` | `server/src/socket/handlers/adminHandlers.ts` — admin only; re-draws 4 words server-side silently |
 | Server → Client | `game_ended` | `{}` | fired on `end_game`; client navigates to end screen |
 | Server → Client | `game_state_update` | `{ players: Player[], status: string, settings: GameConfig }` | `app/pages/WaitingRoomPage.tsx` → `gameStore.handleGameStateUpdate`; also fired on `restart_game` |
+| Server → Client | `admin_transferred` | `{ newAdminId: string, newAdminName: string }` | `app/pages/GamePage.tsx` → `gameStore.handleAdminTransferred`; updates `adminId` in store, sets `adminTransferMessage`; `AdminTransferNotification` renders toast for 3s |
 
 ## API route reference (current state)
 

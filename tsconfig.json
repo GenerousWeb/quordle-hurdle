@@ -25,7 +25,8 @@
       "shared/*": ["./shared/*"],
       "client/components/*": ["./client/src/components/*"],
       "client/store/*": ["./client/src/store/*"],
-      "client/socket/*": ["./client/src/socket/*"]
+      "client/socket/*": ["./client/src/socket/*"],
+      "client/pages/*": ["./client/src/pages/*"]
     },
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,

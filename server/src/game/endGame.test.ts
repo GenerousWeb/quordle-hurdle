@@ -128,9 +128,9 @@ describe("game_ended — event firing", () => {
     gamePlayers.set(
       GAME_ID,
       new Map([
-        ["p1", { name: "Alice" }],
-        ["p2", { name: "Bob" }],
-        ["p3", { name: "Carol" }],
+        ["p1", { name: "Alice", isConnected: true, role: "player" as const }],
+        ["p2", { name: "Bob", isConnected: true, role: "player" as const }],
+        ["p3", { name: "Carol", isConnected: true, role: "player" as const }],
       ]),
     );
     const players = new Map([

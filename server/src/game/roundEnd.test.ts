@@ -137,9 +137,9 @@ describe("round_ended — timer integration (tests 9–12)", () => {
       ["p3", { score: 200, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
     ]);
     gamePlayers.set(GAME_ID, new Map([
-      ["p1", { name: "Alice" }],
-      ["p2", { name: "Bob" }],
-      ["p3", { name: "Carol" }],
+      ["p1", { name: "Alice", isConnected: true, role: "player" as const }],
+      ["p2", { name: "Bob", isConnected: true, role: "player" as const }],
+      ["p3", { name: "Carol", isConnected: true, role: "player" as const }],
     ]));
 
     adminGames.set(GAME_ID, makeAdminGameState({ status: "waiting", timeLimitSeconds: 60 }));

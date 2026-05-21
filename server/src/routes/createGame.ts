@@ -11,13 +11,14 @@ type CreateGameBody = {
 type GameSession = {
   gameId: string;
   adminPlayerId: string;
+  adminName: string;
   config: GameConfig;
   status: "waiting" | "active" | "ended";
 };
 
 export const gameSessions = new Map<string, GameSession>();
 
-type SuccessBody = { gameId: string; inviteLink: string };
+type SuccessBody = { gameId: string; playerId: string };
 type ErrorBody = { error: string };
 
 type CreateGameResult =
@@ -42,11 +43,11 @@ export function handleCreateGame(body: CreateGameBody): CreateGameResult {
 
   const gameId = randomUUID();
   const adminPlayerId = randomUUID();
-  const inviteLink = `https://game.app/play/${gameId}`;
 
   gameSessions.set(gameId, {
     gameId,
     adminPlayerId,
+    adminName: adminName.trim(),
     config: { maxPlayers, rounds, timeLimitSeconds },
     status: "waiting",
   });
@@ -54,5 +55,5 @@ export function handleCreateGame(body: CreateGameBody): CreateGameResult {
   const sessionPayload = JSON.stringify({ playerId: adminPlayerId, gameId, role: "admin" });
   const cookie = `session=${encodeURIComponent(sessionPayload)}; HttpOnly; Path=/; SameSite=Lax`;
 
-  return { status: 201, body: { gameId, inviteLink }, cookie };
+  return { status: 201, body: { gameId, playerId: adminPlayerId }, cookie };
 }

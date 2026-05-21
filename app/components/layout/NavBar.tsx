@@ -13,7 +13,7 @@ export default function NavBar() {
       <div className="h-full px-4 md:px-8 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center">
-          <span className="font-mono text-xl md:text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          <span className="font-mono text-xl md:text-xl font-bold bg-linear-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
             quordle//
           </span>
         </Link>

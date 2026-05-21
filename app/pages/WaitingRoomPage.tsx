@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { useParams, useLocation, useNavigate } from "react-router";
 import { useStore } from "zustand/react";
 import { io, type Socket } from "socket.io-client";
 import AppShell from "../components/layout/AppShell";
@@ -10,20 +10,20 @@ import type { GameConfig, Player } from "shared/types/game";
 
 const SERVER_URL = "http://localhost:3001";
 
-// Placeholder until session/auth is wired up
-const PLACEHOLDER_PLAYER_ID = "player-local";
-
 export default function WaitingRoomPage() {
   const { gameId = "" } = useParams();
+  const location = useLocation();
+  const playerId = (location.state as { playerId?: string } | null)?.playerId ?? "";
+  const navigate = useNavigate();
   const { players, settings } = useStore(gameStore);
   const [isAdmin, setIsAdmin] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
-  const inviteLink = `https://game.app/play/${gameId}`;
+  const inviteLink = `${typeof window !== "undefined" ? window.location.origin : ""}/join/${gameId}`;
 
   useEffect(() => {
     const socket = io(SERVER_URL, {
-      auth: { playerId: PLACEHOLDER_PLAYER_ID },
+      auth: { playerId },
     });
     socketRef.current = socket;
 
@@ -34,15 +34,19 @@ export default function WaitingRoomPage() {
       (data: { players: Player[]; status: string; settings: GameConfig }) => {
         gameStore.getState().handleGameStateUpdate(data);
         const adminPlayer = data.players.find((p) => p.role === "admin");
-        setIsAdmin(adminPlayer?.playerId === PLACEHOLDER_PLAYER_ID);
+        setIsAdmin(adminPlayer?.playerId === playerId);
       },
     );
+
+    socket.on("round_started", ({ deadline }: { deadline: number }) => {
+      void navigate(`/play/${gameId}`, { state: { playerId, deadline } });
+    });
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [gameId]);
+  }, [gameId, playerId, navigate]);
 
   const handleStart = () => {
     socketRef.current?.emit("start_game", { gameId });
