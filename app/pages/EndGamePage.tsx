@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useLocation } from "react-router";
+import { useParams, useLocation, useNavigate } from "react-router";
 import { useStore } from "zustand/react";
 import { io, type Socket } from "socket.io-client";
 import AppShell from "../components/layout/AppShell";
@@ -12,6 +12,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 export default function EndGamePage() {
   const { gameId = "" } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const playerId = (location.state as { playerId?: string } | null)?.playerId ?? "";
   const [isAdmin, setIsAdmin] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -40,7 +41,7 @@ export default function EndGamePage() {
   }, [gameId, playerId]);
 
   const handleRestartGame = () => {
-    socketRef.current?.emit("restart_game", { gameId });
+    navigate("/");
   };
 
   if (!endGameData) {
