@@ -3,7 +3,7 @@ import AppShell from "../components/layout/AppShell";
 import { CreateGameForm } from "client/components/CreateGameForm";
 import type { GameConfig } from "shared/types/game";
 
-const API_BASE = "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 export default function CreatePage() {
   const navigate = useNavigate();

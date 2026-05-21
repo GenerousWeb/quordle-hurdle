@@ -7,7 +7,7 @@ import { BetweenRounds } from "client/pages/BetweenRounds";
 import { gameStore } from "client/store/gameStore";
 import type { GameConfig, LeaderboardEntry, Player, PodiumEntry } from "shared/types/game";
 
-const SERVER_URL = "http://localhost:3001";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 export default function BetweenRoundsPage() {
   const { gameId = "" } = useParams();

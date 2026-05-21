@@ -4,7 +4,7 @@ import { io, type Socket } from "socket.io-client";
 import AppShell from "../components/layout/AppShell";
 import { AdminControls } from "client/components/AdminControls";
 
-const SERVER_URL = "http://localhost:3001";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 const PLACEHOLDER_PLAYER_ID = "player-local";
 
 export default function EndGamePage() {
