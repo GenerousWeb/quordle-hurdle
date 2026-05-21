@@ -15,7 +15,7 @@ type BoardStore = {
   shaking: boolean;
   myScore: number;
 
-  initBoards: (words: string[]) => void;
+  initBoards: (words: (string | null)[]) => void;
   appendLetter: (letter: string) => void;
   deleteLetter: () => void;
   setSubmitting: (value: boolean) => void;
@@ -38,7 +38,7 @@ export const boardStore = createStore<BoardStore>((set, get) => ({
   shaking: false,
   myScore: 0,
 
-  initBoards: (words: string[]) => {
+  initBoards: (words: (string | null)[]) => {
     const boards: BoardState[] = words.map((word) => ({
       status: "unsolved",
       targetWord: word,
