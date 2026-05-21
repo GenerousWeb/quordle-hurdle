@@ -16,7 +16,10 @@
       "Bash(echo \"EXIT:$?\")",
       "Bash(grep -v \"^$\")",
       "Bash(npx vitest *)",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(node_modules/.bin/vitest run *)",
+      "Bash(./node_modules/.bin/vitest run *)",
+      "Bash(vitest run *)"
     ]
   }
 }

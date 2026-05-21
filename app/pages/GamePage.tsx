@@ -57,10 +57,10 @@ export default function GamePage() {
   const { gameId = "local" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const state = location.state as { playerId?: string; deadline?: number } | null;
+  const state = location.state as { playerId?: string; deadline?: number; roundNumber?: number } | null;
   const playerId = state?.playerId ?? LOCAL_PLAYER_ID;
   const joinDeadline = state?.deadline ?? null;
-  const roundNumber = 1;
+  const [roundNumber, setRoundNumber] = useState<number>(state?.roundNumber ?? 1);
 
   const [timerDeadline, setTimerDeadline] = useState<number | null>(joinDeadline);
   const [syncedDeadline, setSyncedDeadline] = useState<number | undefined>(undefined);
@@ -99,11 +99,12 @@ export default function GamePage() {
 
     socket.on(
       "round_started",
-      ({ deadline }: { deadline: number }) => {
+      ({ deadline, roundNumber: rn }: { deadline: number; roundNumber: number }) => {
         setTimerDeadline(deadline);
         setTimerStopped(false);
         setSyncedDeadline(undefined);
         setScorePopup(null);
+        setRoundNumber(rn);
       },
     );
 

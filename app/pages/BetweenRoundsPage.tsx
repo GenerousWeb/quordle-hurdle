@@ -33,8 +33,8 @@ export default function BetweenRoundsPage() {
       },
     );
 
-    socket.on("round_started", ({ deadline }: { deadline: number }) => {
-      void navigate(`/play/${gameId}`, { state: { playerId, deadline } });
+    socket.on("round_started", ({ deadline, roundNumber }: { deadline: number; roundNumber: number }) => {
+      void navigate(`/play/${gameId}`, { state: { playerId, deadline, roundNumber } });
     });
 
     socket.on("game_ended", (data: { podium: PodiumEntry[]; finalLeaderboard: LeaderboardEntry[] }) => {
