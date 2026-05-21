@@ -14,7 +14,7 @@ import { useStore } from "zustand";
 import { io } from "socket.io-client";
 import type { GameConfig, LeaderboardEntry, Player, PodiumEntry, RoundSummary, TileResult } from "shared/types/game";
 
-const SERVER_URL = "http://localhost:3001";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 const LOCAL_PLAYER_ID = "player-local";
 const PLACEHOLDER_WORDS = ["apple", "grape", "stone", "light"];

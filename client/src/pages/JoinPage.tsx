@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 
-const API_BASE = "http://localhost:3001";
+const API_BASE = import.meta.env.VITE_SERVER_URL || "http://localhost:3001";
 
 type JoinResponse = {
   playerId?: string;
