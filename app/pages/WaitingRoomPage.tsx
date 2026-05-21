@@ -38,8 +38,8 @@ export default function WaitingRoomPage() {
       },
     );
 
-    socket.on("round_started", ({ deadline }: { deadline: number }) => {
-      void navigate(`/play/${gameId}`, { state: { playerId, deadline } });
+    socket.on("round_started", ({ deadline, roundNumber }: { deadline: number; roundNumber: number }) => {
+      void navigate(`/play/${gameId}`, { state: { playerId, deadline, roundNumber } });
     });
 
     return () => {
