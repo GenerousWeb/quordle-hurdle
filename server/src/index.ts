@@ -86,12 +86,11 @@ io.on("connection", (socket) => {
       handlePlayerJoinSocket(io, gameId, playerId);
 
       // If the game is already active, send the current round state to this socket
-      // so the client can initialize boards with the real words
       const adminGame = adminGames.get(gameId);
       if (adminGame?.status === "active" && adminGame.currentWords.length > 0) {
         const deadline = gameDeadlines.get(gameId) ?? Date.now() + adminGame.timeLimitSeconds * 1000;
         socket.emit("round_started", {
-          words: adminGame.currentWords,
+          boardCount: adminGame.currentWords.length,
           roundNumber: adminGame.roundNumber,
           startTime: Date.now(),
           deadline,
