@@ -54,7 +54,10 @@ describe("GamePage — reconnect: client-side behaviour", () => {
       await userEvent.click(screen.getByTestId("join-button"));
 
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith("/between/test-game-id");
+        expect(mockNavigate).toHaveBeenCalledWith(
+          "/between/test-game-id",
+          expect.objectContaining({ state: expect.objectContaining({ playerId: "p1" }) }),
+        );
       });
     });
 
@@ -70,7 +73,10 @@ describe("GamePage — reconnect: client-side behaviour", () => {
       await userEvent.click(screen.getByTestId("join-button"));
 
       await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith("/end/test-game-id");
+        expect(mockNavigate).toHaveBeenCalledWith(
+          "/end/test-game-id",
+          expect.objectContaining({ state: expect.objectContaining({ playerId: "p1" }) }),
+        );
       });
     });
   });

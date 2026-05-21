@@ -19,7 +19,18 @@ export async function handleRequest(
   const url = req.url ?? "/";
   const method = req.method ?? "GET";
 
+  const origin = req.headers.origin ?? "http://localhost:5173";
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Content-Type", "application/json");
+
+  if (method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
 
   if (method === "POST" && url === "/game/create") {
     const raw = await readBody(req);

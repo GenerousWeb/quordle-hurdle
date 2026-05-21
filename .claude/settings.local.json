@@ -15,7 +15,8 @@
       "Bash(npm test *)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(grep -v \"^$\")",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(xargs ls *)"
     ]
   }
 }

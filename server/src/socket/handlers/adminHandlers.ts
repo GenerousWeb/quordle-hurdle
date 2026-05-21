@@ -24,7 +24,7 @@ type IoLike = {
 };
 
 type SocketLike = {
-  handshake: { auth: { playerId?: string; role?: string } };
+  handshake: { auth: { playerId?: string } };
   emit(event: string, data?: unknown): void;
   on(event: string, handler: (payload: Record<string, string>) => void): void;
 };
@@ -76,11 +76,11 @@ function fireRoundEnded(io: IoLike, gameId: string): void {
 
 
 export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
-  const { role } = socket.handshake.auth;
-  const isAdmin = () => role === "admin";
+  const playerId = socket.handshake.auth.playerId as string | undefined;
+  const isAdmin = (gameId: string) => adminGames.get(gameId)?.adminPlayerId === playerId;
 
   socket.on("start_game", ({ gameId }) => {
-    if (!isAdmin()) {
+    if (!isAdmin(gameId)) {
       socket.emit("not_authorized", { error: "not_authorized" });
       return;
     }
@@ -97,18 +97,30 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     adminGame.roundNumber = 1;
 
     const deadline = Date.now() + adminGame.timeLimitSeconds * 1000;
-    const game = games.get(gameId);
-    if (game) {
-      game.status = "active";
-      game.roundNumber = 1;
-      game.deadline = deadline;
-    }
+
+    // Initialize game state with all current players, preserving any existing scores
+    const gamePlayersMap = gamePlayers.get(gameId) ?? new Map<string, { name: string }>();
+    const existingGame = games.get(gameId);
+    const playerEntries = Array.from(gamePlayersMap.keys()).map((pid) => [
+      pid,
+      {
+        score: existingGame?.players.get(pid)?.score ?? 0,
+        boards: words.map((word) => ({
+          targetWord: word,
+          attemptCount: 0,
+          status: "unsolved" as const,
+        })),
+      },
+    ] as const);
+    games.set(gameId, {
+      status: "active",
+      roundNumber: 1,
+      deadline,
+      players: new Map(playerEntries),
+    });
 
     // Snapshot per-player scores at round start for round-score delta calculation
     const roundStartScores = new Map<string, number>();
-    for (const [pid, p] of (game?.players ?? new Map())) {
-      roundStartScores.set(pid, p.score);
-    }
     adminGame.roundStartScores = roundStartScores;
 
     io.to(gameId).emit("round_started", {
@@ -123,7 +135,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
   });
 
   socket.on("start_next_round", ({ gameId }) => {
-    if (!isAdmin()) {
+    if (!isAdmin(gameId)) {
       socket.emit("not_authorized", { error: "not_authorized" });
       return;
     }
@@ -145,9 +157,17 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
       game.status = "active";
       game.roundNumber = adminGame.roundNumber;
       game.deadline = deadline;
+      // Reset boards for new round, preserve cumulative scores
+      for (const [, player] of game.players) {
+        player.boards = words.map((word) => ({
+          targetWord: word,
+          attemptCount: 0,
+          status: "unsolved" as const,
+        }));
+      }
     }
 
-    // Snapshot per-player scores at round start
+    // Snapshot per-player scores at round start for round-score delta calculation
     const roundStartScores = new Map<string, number>();
     for (const [pid, p] of (game?.players ?? new Map())) {
       roundStartScores.set(pid, p.score);
@@ -166,7 +186,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
   });
 
   socket.on("end_game", ({ gameId }) => {
-    if (!isAdmin()) {
+    if (!isAdmin(gameId)) {
       socket.emit("not_authorized", { error: "not_authorized" });
       return;
     }
@@ -186,7 +206,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
   });
 
   socket.on("restart_game", ({ gameId }) => {
-    if (!isAdmin()) {
+    if (!isAdmin(gameId)) {
       socket.emit("not_authorized", { error: "not_authorized" });
       return;
     }
@@ -211,7 +231,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
   });
 
   socket.on("shuffle_words", ({ gameId }) => {
-    if (!isAdmin()) {
+    if (!isAdmin(gameId)) {
       socket.emit("not_authorized", { error: "not_authorized" });
       return;
     }

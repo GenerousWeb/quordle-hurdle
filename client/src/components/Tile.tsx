@@ -61,6 +61,17 @@ export function Tile({ letter, state, tileIndex, isShaking }: TileProps) {
 
   const stagger = (tileIndex ?? 0) * FLIP_STAGGER_MS;
 
+  const bgClass =
+    displayState === "green"
+      ? "bg-green-600 border-green-600"
+      : displayState === "yellow"
+        ? "bg-yellow-500 border-yellow-500"
+        : displayState === "grey"
+          ? "bg-gray-600 border-gray-600"
+          : displayState === "typing"
+            ? "bg-transparent border-gray-300"
+            : "bg-transparent border-gray-600";
+
   return (
     <div
       data-tile-index={tileIndex}
@@ -69,6 +80,7 @@ export function Tile({ letter, state, tileIndex, isShaking }: TileProps) {
       data-flip-mid={flipMid ? "true" : undefined}
       data-shaking={isShaking ? "true" : undefined}
       style={flipping ? { animationDelay: `${stagger}ms` } : undefined}
+      className={`w-10 h-10 border-2 flex items-center justify-center font-bold text-sm text-white uppercase ${bgClass}`}
     >
       {letter != null ? letter.toUpperCase() : ""}
     </div>

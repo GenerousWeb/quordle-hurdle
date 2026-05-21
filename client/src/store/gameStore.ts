@@ -13,6 +13,9 @@ type GameStore = {
   roundSummary: RoundSummary | null;
   leaderboard: LeaderboardEntry[];
   endGameData: EndGameData | null;
+  adminId: string | null;
+  myPlayerId: string | null;
+  adminTransferMessage: string | null;
 
   handleGameStateUpdate: (data: {
     players: Player[];
@@ -22,6 +25,7 @@ type GameStore = {
   handleRoundEnded: (data: RoundSummary) => void;
   handleLeaderboardUpdate: (data: { leaderboard: LeaderboardEntry[] }) => void;
   handleGameEnded: (data: EndGameData) => void;
+  handleAdminTransferred: (data: { newAdminId: string; newAdminName: string }) => void;
 };
 
 export const gameStore = createStore<GameStore>((set) => ({
@@ -31,6 +35,9 @@ export const gameStore = createStore<GameStore>((set) => ({
   roundSummary: null,
   leaderboard: [],
   endGameData: null,
+  adminId: null,
+  myPlayerId: null,
+  adminTransferMessage: null,
 
   handleGameStateUpdate: ({ players, status, settings }) => {
     set({ players, gameStatus: status, settings });
@@ -46,6 +53,10 @@ export const gameStore = createStore<GameStore>((set) => ({
 
   handleGameEnded: (data) => {
     set({ endGameData: data, gameStatus: "finished" });
+  },
+
+  handleAdminTransferred: ({ newAdminId, newAdminName }) => {
+    set({ adminId: newAdminId, adminTransferMessage: `${newAdminName} is now the admin` });
   },
 }));
 

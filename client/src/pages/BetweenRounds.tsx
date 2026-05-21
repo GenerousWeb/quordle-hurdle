@@ -35,19 +35,29 @@ export function BetweenRounds({
 
       <LeaderboardTable entries={leaderboard} myPlayerId={myPlayerId} />
 
-      <div className="mt-6">
+      <div className="mt-8">
         {isAdmin ? (
           isLastRound ? (
-            <button data-testid="end-game-button" onClick={onEndGame}>
+            <button
+              data-testid="end-game-button"
+              onClick={onEndGame}
+              className="w-full py-4 bg-red-700 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors text-lg"
+            >
               End Game
             </button>
           ) : (
-            <button data-testid="start-next-round-button" onClick={onStartNextRound}>
-              Start Next Round
+            <button
+              data-testid="start-next-round-button"
+              onClick={onStartNextRound}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors text-lg"
+            >
+              Start Next Round →
             </button>
           )
         ) : (
-          <p data-testid="waiting-message">Waiting for admin…</p>
+          <p data-testid="waiting-message" className="text-center text-gray-400">
+            Waiting for admin…
+          </p>
         )}
       </div>
     </div>

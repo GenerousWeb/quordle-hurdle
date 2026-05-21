@@ -54,15 +54,16 @@ export function JoinPage() {
 
       const data = (await response.json()) as JoinResponse;
       const status = data.gameStatus ?? "";
+      const playerId = data.playerId;
 
       if (status === "waiting") {
-        navigate(`/wait/${gameId}`);
+        void navigate(`/wait/${gameId}`, { state: { playerId } });
       } else if (status === "active") {
-        navigate(`/play/${gameId}`, { state: { deadline: data.deadline } });
+        void navigate(`/play/${gameId}`, { state: { deadline: data.deadline, playerId } });
       } else if (status === "between_rounds") {
-        navigate(`/between/${gameId}`);
+        void navigate(`/between/${gameId}`, { state: { playerId } });
       } else {
-        navigate(`/end/${gameId}`);
+        void navigate(`/end/${gameId}`, { state: { playerId } });
       }
     } catch {
       setServerError("Failed to join game. Please try again.");
@@ -71,28 +72,48 @@ export function JoinPage() {
   };
 
   return (
-    <div>
-      <h1>Join Game</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <input
-            data-testid="name-input"
-            type="text"
-            value={playerName}
-            maxLength={20}
-            onChange={(e) => {
-              setPlayerName(e.target.value);
-              setNameError(null);
-            }}
-            placeholder="Your name"
-          />
-          {nameError && <p data-testid="name-error">{nameError}</p>}
-        </div>
-        {serverError && <p data-testid="server-error">{serverError}</p>}
-        <button data-testid="join-button" type="submit" disabled={submitting}>
-          Join
-        </button>
-      </form>
+    <div className="min-h-[calc(100vh-56px)] flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <h1 className="text-2xl font-bold text-gray-100 mb-2">Join game</h1>
+        <p className="text-gray-400 text-sm mb-8">Enter your name to join the game.</p>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <input
+              data-testid="name-input"
+              type="text"
+              value={playerName}
+              maxLength={20}
+              onChange={(e) => {
+                setPlayerName(e.target.value);
+                setNameError(null);
+              }}
+              placeholder="Your name"
+              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-indigo-400 transition-colors"
+            />
+            {nameError && (
+              <p data-testid="name-error" className="text-red-400 text-sm mt-1">
+                {nameError}
+              </p>
+            )}
+          </div>
+
+          {serverError && (
+            <p data-testid="server-error" className="text-red-400 text-sm">
+              {serverError}
+            </p>
+          )}
+
+          <button
+            data-testid="join-button"
+            type="submit"
+            disabled={submitting}
+            className="w-full py-3 bg-linear-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all"
+          >
+            {submitting ? "Joining…" : "Join game →"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

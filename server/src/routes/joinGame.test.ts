@@ -45,8 +45,12 @@ describe("POST /game/join handler", () => {
   });
 
   it("3: join to full game returns 403 with game_full", () => {
-    // maxPlayers=2: admin + 1 joiner = full
-    handleJoinGame({ gameId, playerName: "Bob" }); // fills the one available slot
+    // maxPlayers=2: admin occupies slot 1 (added by socket handler at runtime)
+    const session = gameSessions.get(gameId)!;
+    if (!gamePlayers.has(gameId)) gamePlayers.set(gameId, new Map());
+    gamePlayers.get(gameId)!.set(session.adminPlayerId, { name: "Alice", isConnected: true, role: "admin" });
+    // Bob fills slot 2 — game is now full
+    handleJoinGame({ gameId, playerName: "Bob" });
     const result = handleJoinGame({ gameId, playerName: "Carol" });
     expect(result.status).toBe(403);
     if (result.status !== 403) return;

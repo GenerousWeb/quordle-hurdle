@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { boardStore } from "../store/boardStore";
 import type { BoardResultEntry } from "../store/boardStore";
@@ -31,6 +31,7 @@ type UseGameSocketOptions = {
 
 export function useGameSocket({ gameId, roundNumber, playerId, serverUrl }: UseGameSocketOptions) {
   const socketRef = useRef<Socket | null>(null);
+  const [guessError, setGuessError] = useState<string | null>(null);
 
   useEffect(() => {
     const socket = io(serverUrl, {
@@ -74,18 +75,27 @@ export function useGameSocket({ gameId, roundNumber, playerId, serverUrl }: UseG
     boardStore.getState().applyAllResults(entries);
   }
 
+  function showError(msg: string) {
+    setGuessError(msg);
+    setTimeout(() => setGuessError(null), 2000);
+  }
+
   function handleError(data: GuessResultError) {
     switch (data.error) {
       case "not_a_word":
         boardStore.getState().setSubmitting(false);
         boardStore.getState().setShaking(true);
+        showError("Not in word list");
         setTimeout(() => boardStore.getState().setShaking(false), SHAKE_DURATION_MS);
+        break;
+      case "invalid_format":
+        boardStore.getState().setSubmitting(false);
+        showError("Word must be 5 letters");
         break;
       case "round_expired":
         boardStore.getState().lockAllBoards();
         break;
       case "stale_round":
-        // Full state refresh would be triggered here; for now just unblock input
         boardStore.getState().setSubmitting(false);
         break;
       case "all_boards_terminal":
@@ -97,10 +107,13 @@ export function useGameSocket({ gameId, roundNumber, playerId, serverUrl }: UseG
   }
 
   function handleEnter(guess: string) {
-    if (!socketRef.current?.connected) return;
+    if (!socketRef.current?.connected) {
+      showError("Connecting…");
+      return;
+    }
     boardStore.getState().setSubmitting(true);
     socketRef.current.emit("submit_guess", { gameId, roundNumber, guess });
   }
 
-  return { handleEnter };
+  return { handleEnter, guessError };
 }

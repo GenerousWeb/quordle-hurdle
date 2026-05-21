@@ -43,7 +43,10 @@ describe("JoinPage — join flow", () => {
     await userEvent.click(screen.getByTestId("join-button"));
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/wait/test-game-id");
+      expect(mockNavigate).toHaveBeenCalledWith(
+        "/wait/test-game-id",
+        expect.objectContaining({ state: expect.objectContaining({ playerId: "p1" }) }),
+      );
     });
   });
 
@@ -80,7 +83,10 @@ describe("JoinPage — join flow", () => {
     await userEvent.click(screen.getByTestId("join-button"));
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/end/test-game-id");
+      expect(mockNavigate).toHaveBeenCalledWith(
+        "/end/test-game-id",
+        expect.objectContaining({ state: expect.objectContaining({ playerId: "p1" }) }),
+      );
     });
   });
 
