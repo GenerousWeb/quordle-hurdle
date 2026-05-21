@@ -4,7 +4,6 @@ import { useStore } from "zustand/react";
 import { io, type Socket } from "socket.io-client";
 import AppShell from "../components/layout/AppShell";
 import { WaitingRoom } from "client/components/WaitingRoom";
-import { AdminControls } from "client/components/AdminControls";
 import { gameStore } from "client/store/gameStore";
 import type { GameConfig, Player } from "shared/types/game";
 
@@ -52,10 +51,6 @@ export default function WaitingRoomPage() {
     socketRef.current?.emit("start_game", { gameId });
   };
 
-  const handleEndGame = () => {
-    socketRef.current?.emit("end_game", { gameId });
-  };
-
   return (
     <AppShell>
       <WaitingRoom
@@ -66,13 +61,6 @@ export default function WaitingRoomPage() {
         timeLimitSeconds={settings?.timeLimitSeconds ?? 120}
         maxPlayers={settings?.maxPlayers ?? 8}
         onStart={handleStart}
-      />
-      <AdminControls
-        isAdmin={isAdmin}
-        status="waiting"
-        players={players}
-        onStartGame={handleStart}
-        onEndGame={handleEndGame}
       />
     </AppShell>
   );

@@ -141,7 +141,7 @@ describe("adminHandlers — end_game", () => {
     expect(adminGames.get(GAME_ID)?.status).toBe("finished");
   });
 
-  it("16: end_game mid-round fires game_ended and transitions to finished", () => {
+  it("16: end_game mid-round fires game_ended and cleans up game data", () => {
     adminGames.set(GAME_ID, makeAdminGameState({ status: "active", roundNumber: 2 }));
     games.set(GAME_ID, makeGameState({ status: "active", deadline: Date.now() + 60000 }));
 
@@ -153,12 +153,12 @@ describe("adminHandlers — end_game", () => {
 
     expect(emitted.some((e) => e.event === "game_ended")).toBe(true);
     expect(adminGames.get(GAME_ID)?.status).toBe("finished");
-    expect(games.get(GAME_ID)?.status).toBe("ended");
+    expect(games.has(GAME_ID)).toBe(false);
   });
 });
 
 describe("adminHandlers — restart_game", () => {
-  it("13: restart_game resets all player scores to 0", () => {
+  it("13: restart_game clears all game score data", () => {
     const players = new Map([
       ["p1", { score: 150, boards: [] }],
       ["p2", { score: 200, boards: [] }],
@@ -172,10 +172,7 @@ describe("adminHandlers — restart_game", () => {
 
     handlers["restart_game"]({ gameId: GAME_ID });
 
-    const game = games.get(GAME_ID)!;
-    for (const player of game.players.values()) {
-      expect(player.score).toBe(0);
-    }
+    expect(games.has(GAME_ID)).toBe(false);
   });
 
   it("14: restart_game clears usedWords", () => {

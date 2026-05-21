@@ -223,7 +223,7 @@ describe("game_ended — event firing", () => {
 });
 
 describe("restart_game", () => {
-  it("14: restart_game resets all player scores to 0", () => {
+  it("14: restart_game clears all game score data", () => {
     const players = new Map([
       ["p1", { score: 150, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
       ["p2", { score: 200, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
@@ -237,9 +237,7 @@ describe("restart_game", () => {
 
     handlers["restart_game"]({ gameId: GAME_ID });
 
-    for (const player of games.get(GAME_ID)!.players.values()) {
-      expect(player.score).toBe(0);
-    }
+    expect(games.has(GAME_ID)).toBe(false);
   });
 
   it("15: restart_game sets adminGame status to waiting", () => {

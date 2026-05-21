@@ -4,6 +4,7 @@ import { startRoundTimer } from "../../game/timer";
 import { buildRoundEndedPayload } from "../../game/roundEnd";
 import { buildGameEndedPayload } from "../../game/endGame";
 import { gamePlayers } from "../../routes/joinGame";
+import { gameSessions } from "../../routes/createGame";
 import { selectWords } from "../../game/selectWords";
 
 export type AdminGameState = {
@@ -49,9 +50,8 @@ function fireRoundEnded(io: IoLike, gameId: string): void {
 
   if (isFinalRound) {
     adminGame.status = "finished";
-    const game = games.get(gameId);
-    if (game) game.status = "ended";
     io.to(gameId).emit("game_ended", buildEndGamePayloadFromState(gameId));
+    games.delete(gameId);
     return;
   }
 
@@ -199,12 +199,8 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     }
 
     adminGame.status = "finished";
-    const game = games.get(gameId);
-    if (game) {
-      game.status = "ended";
-    }
-
     io.to(gameId).emit("game_ended", buildEndGamePayloadFromState(gameId));
+    games.delete(gameId);
   });
 
   socket.on("restart_game", ({ gameId }) => {
@@ -220,16 +216,21 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     adminGame.currentWords = [];
     adminGame.usedWords = new Set();
 
-    const game = games.get(gameId);
-    if (game) {
-      game.status = "waiting";
-      game.roundNumber = 0;
-      for (const player of game.players.values()) {
-        player.score = 0;
-      }
-    }
+    // Delete game data so next start_game initialises all scores at 0
+    games.delete(gameId);
 
-    io.to(gameId).emit("game_state_update", { status: "waiting" });
+    const session = gameSessions.get(gameId);
+    const players = gamePlayers.get(gameId) ?? new Map();
+    io.to(gameId).emit("game_state_update", {
+      players: Array.from(players.entries()).map(([pid, p]) => ({
+        playerId: pid,
+        name: p.name,
+        isConnected: p.isConnected,
+        role: p.role,
+      })),
+      status: "waiting",
+      settings: session?.config ?? { maxPlayers: 10, rounds: 3, timeLimitSeconds: 120 },
+    });
   });
 
   socket.on("shuffle_words", ({ gameId }) => {

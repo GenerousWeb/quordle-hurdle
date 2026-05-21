@@ -25,9 +25,11 @@ export default function EndGamePage() {
     socket.emit("join_game", { gameId });
 
     socket.on("game_state_update", (data: { players: Player[]; status: string; settings: GameConfig }) => {
-      gameStore.getState().handleGameStateUpdate(data);
-      const adminPlayer = data.players.find((p) => p.role === "admin");
-      setIsAdmin(adminPlayer?.playerId === playerId);
+      if (Array.isArray(data.players) && data.settings) {
+        gameStore.getState().handleGameStateUpdate(data);
+        const adminPlayer = data.players.find((p) => p.role === "admin");
+        setIsAdmin(adminPlayer?.playerId === playerId);
+      }
     });
 
     socket.on("game_ended", (data: { podium: PodiumEntry[]; finalLeaderboard: LeaderboardEntry[] }) => {
