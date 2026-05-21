@@ -95,6 +95,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     words.forEach((w) => adminGame.usedWords.add(w));
     adminGame.status = "active";
     adminGame.roundNumber = 1;
+    console.log(`[game:${gameId}] round 1 words:`, words);
 
     const deadline = Date.now() + adminGame.timeLimitSeconds * 1000;
 
@@ -124,7 +125,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     adminGame.roundStartScores = roundStartScores;
 
     io.to(gameId).emit("round_started", {
-      words,
+      boardCount: words.length,
       roundNumber: 1,
       startTime: Date.now(),
       deadline,
@@ -150,6 +151,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     words.forEach((w) => adminGame.usedWords.add(w));
     adminGame.status = "active";
     adminGame.roundNumber += 1;
+    console.log(`[game:${gameId}] round ${adminGame.roundNumber} words:`, words);
 
     const deadline = Date.now() + adminGame.timeLimitSeconds * 1000;
     const game = games.get(gameId);
@@ -175,7 +177,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
     adminGame.roundStartScores = roundStartScores;
 
     io.to(gameId).emit("round_started", {
-      words,
+      boardCount: words.length,
       roundNumber: adminGame.roundNumber,
       startTime: Date.now(),
       deadline,

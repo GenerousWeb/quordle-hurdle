@@ -42,8 +42,8 @@ export function useGameSocket({ gameId, roundNumber, playerId, serverUrl }: UseG
 
     socket.emit("join_game", { gameId });
 
-    socket.on("round_started", ({ words }: { words: string[] }) => {
-      boardStore.getState().initBoards(words);
+    socket.on("round_started", ({ boardCount }: { boardCount: number }) => {
+      boardStore.getState().initBoards(Array(boardCount).fill(null));
     });
 
     socket.on("guess_result", (data: GuessResultSuccess | GuessResultError) => {
