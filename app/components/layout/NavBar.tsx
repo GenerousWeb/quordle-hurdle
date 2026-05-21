@@ -27,7 +27,7 @@ export default function NavBar() {
             How to play
           </button>
           <a
-            href="#"
+            href="https://github.com/GenerousWeb/quordle-hurdle"
             target="_blank"
             rel="noreferrer"
             className="text-gray-400 hover:text-gray-100 transition-colors text-sm font-medium"
