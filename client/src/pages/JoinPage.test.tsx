@@ -104,4 +104,19 @@ describe("JoinPage — join flow", () => {
       expect(screen.getByTestId("server-error")).toHaveTextContent(/game is full/i);
     });
   });
+
+  it("15: name taken message shown on 422 response", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      status: 422,
+      json: async () => ({ error: "name_taken" }),
+    } as Response);
+
+    render(<JoinPage />);
+    await userEvent.type(screen.getByTestId("name-input"), "Alice");
+    await userEvent.click(screen.getByTestId("join-button"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("server-error")).toHaveTextContent(/name is already taken/i);
+    });
+  });
 });

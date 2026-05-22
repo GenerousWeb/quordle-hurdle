@@ -51,6 +51,11 @@ export function JoinPage() {
         setSubmitting(false);
         return;
       }
+      if (response.status === 422) {
+        setServerError("That name is already taken. Please choose a different name.");
+        setSubmitting(false);
+        return;
+      }
 
       const data = (await response.json()) as JoinResponse;
       const status = data.gameStatus ?? "";

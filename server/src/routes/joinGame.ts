@@ -22,7 +22,8 @@ type JoinResult =
   | { status: 200; body: { playerId: string; gameStatus: string; deadline?: number }; cookie: string }
   | { status: 403; body: { error: "game_full" } }
   | { status: 404; body: { error: "game_not_found" } }
-  | { status: 409; body: { error: "game_finished" } };
+  | { status: 409; body: { error: "game_finished" } }
+  | { status: 422; body: { error: "name_taken" } };
 
 function buildGameStateUpdate(gameId: string) {
   const players = gamePlayers.get(gameId) ?? new Map<string, PlayerRecord>();
@@ -110,6 +111,14 @@ export function handleJoinGame(body: JoinBody, existingPlayerId?: string): JoinR
 
   if (players.size >= session.config.maxPlayers) {
     return { status: 403, body: { error: "game_full" } };
+  }
+
+  const normalizedName = playerName.trim().toLowerCase();
+  const nameTaken = Array.from(players.values()).some(
+    (p) => p.name.toLowerCase() === normalizedName,
+  );
+  if (nameTaken) {
+    return { status: 422, body: { error: "name_taken" } };
   }
 
   const playerId = randomUUID();
