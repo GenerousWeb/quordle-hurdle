@@ -142,6 +142,7 @@ describe("game_ended — event firing", () => {
             targetWord: string;
             attemptCount: number;
             status: "unsolved" | "solved" | "failed";
+            guessedWords: Set<string>;
           }[],
         },
       ],
@@ -153,6 +154,7 @@ describe("game_ended — event firing", () => {
             targetWord: string;
             attemptCount: number;
             status: "unsolved" | "solved" | "failed";
+            guessedWords: Set<string>;
           }[],
         },
       ],
@@ -164,6 +166,7 @@ describe("game_ended — event firing", () => {
             targetWord: string;
             attemptCount: number;
             status: "unsolved" | "solved" | "failed";
+            guessedWords: Set<string>;
           }[],
         },
       ],
@@ -225,8 +228,8 @@ describe("game_ended — event firing", () => {
 describe("restart_game", () => {
   it("14: restart_game clears all game score data", () => {
     const players = new Map([
-      ["p1", { score: 150, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
-      ["p2", { score: 200, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
+      ["p1", { score: 150, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed"; guessedWords: Set<string> }[] }],
+      ["p2", { score: 200, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed"; guessedWords: Set<string> }[] }],
     ]);
     adminGames.set(GAME_ID, makeAdminGameState({ status: "finished" }));
     games.set(GAME_ID, makeGameState({ status: "ended", players }));

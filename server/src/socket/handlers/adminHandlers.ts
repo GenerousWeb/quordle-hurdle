@@ -110,6 +110,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
           targetWord: word,
           attemptCount: 0,
           status: "unsolved" as const,
+          guessedWords: new Set<string>(),
         })),
       },
     ] as const);
@@ -165,6 +166,7 @@ export function registerAdminHandlers(io: IoLike, socket: SocketLike): void {
           targetWord: word,
           attemptCount: 0,
           status: "unsolved" as const,
+          guessedWords: new Set<string>(),
         }));
       }
     }

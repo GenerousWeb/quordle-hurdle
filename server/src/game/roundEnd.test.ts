@@ -132,9 +132,9 @@ describe("round_ended — timer integration (tests 9–12)", () => {
 
   it("11: round_ended leaderboard sorted by totalScore descending", () => {
     const players = new Map([
-      ["p1", { score: 100, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
-      ["p2", { score: 300, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
-      ["p3", { score: 200, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed" }[] }],
+      ["p1", { score: 100, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed"; guessedWords: Set<string> }[] }],
+      ["p2", { score: 300, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed"; guessedWords: Set<string> }[] }],
+      ["p3", { score: 200, boards: [] as { targetWord: string; attemptCount: number; status: "unsolved" | "solved" | "failed"; guessedWords: Set<string> }[] }],
     ]);
     gamePlayers.set(GAME_ID, new Map([
       ["p1", { name: "Alice", isConnected: true, role: "player" as const }],

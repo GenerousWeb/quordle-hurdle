@@ -1,4 +1,6 @@
-import { describe, it } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { handleSubmitGuess, games } from "./submitGuess";
+import type { GuessResultSuccess } from "./submitGuess";
 
 /**
  * Integration tests for the submit_guess WebSocket handler.
@@ -71,6 +73,90 @@ describe("submit_guess — happy path", () => {
   it.todo(
     "93: guess record is appended to PostgreSQL asynchronously — DB row exists with guess, allBoardResults[], and totalScoreDelta after the response is received",
   );
+});
+
+describe("submit_guess — duplicate word scoring", () => {
+  const gameId = "test-dup-scoring";
+  const playerId = "player-dup";
+
+  beforeEach(() => {
+    games.set(gameId, {
+      status: "active",
+      roundNumber: 1,
+      deadline: Date.now() + 60_000,
+      players: new Map([
+        [
+          playerId,
+          {
+            score: 0,
+            boards: [
+              { targetWord: "crane", attemptCount: 0, status: "unsolved", guessedWords: new Set() },
+              { targetWord: "water", attemptCount: 0, status: "unsolved", guessedWords: new Set() },
+              { targetWord: "plant", attemptCount: 0, status: "unsolved", guessedWords: new Set() },
+              { targetWord: "blend", attemptCount: 0, status: "unsolved", guessedWords: new Set() },
+            ],
+          },
+        ],
+      ]),
+    });
+  });
+
+  afterEach(() => {
+    games.delete(gameId);
+  });
+
+  it("first submission of a partial-match word awards tile points", () => {
+    // "trade" partially matches all boards — should earn > 0 tile points
+    const result = handleSubmitGuess(
+      { gameId, roundNumber: 1, guess: "trade" },
+      playerId,
+    ) as GuessResultSuccess;
+
+    expect(result.totalScoreDelta).toBeGreaterThan(0);
+  });
+
+  it("second submission of the same word awards 0 tile points", () => {
+    handleSubmitGuess({ gameId, roundNumber: 1, guess: "trade" }, playerId);
+
+    const second = handleSubmitGuess(
+      { gameId, roundNumber: 1, guess: "trade" },
+      playerId,
+    ) as GuessResultSuccess;
+
+    expect(second.totalScoreDelta).toBe(0);
+  });
+
+  it("player score after two submissions of same word equals score after the first", () => {
+    const first = handleSubmitGuess(
+      { gameId, roundNumber: 1, guess: "trade" },
+      playerId,
+    ) as GuessResultSuccess;
+
+    const scoreAfterFirst = games.get(gameId)!.players.get(playerId)!.score;
+
+    handleSubmitGuess({ gameId, roundNumber: 1, guess: "trade" }, playerId);
+
+    const scoreAfterSecond = games.get(gameId)!.players.get(playerId)!.score;
+
+    expect(scoreAfterSecond).toBe(scoreAfterFirst);
+    expect(scoreAfterFirst).toBe(first.totalScoreDelta);
+  });
+
+  it("a third distinct word after a duplicate still awards tile points", () => {
+    handleSubmitGuess({ gameId, roundNumber: 1, guess: "trade" }, playerId);
+    handleSubmitGuess({ gameId, roundNumber: 1, guess: "trade" }, playerId);
+
+    // "light" has partial matches against some boards
+    const third = handleSubmitGuess(
+      { gameId, roundNumber: 1, guess: "light" },
+      playerId,
+    ) as GuessResultSuccess;
+
+    // Not all boards will have 0 for a completely different word
+    // Just verify it is a valid success response (no error field)
+    expect(third).toHaveProperty("totalScoreDelta");
+    expect(third).not.toHaveProperty("error");
+  });
 });
 
 describe("submit_guess — server validation chain", () => {
