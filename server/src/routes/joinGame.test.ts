@@ -75,4 +75,28 @@ describe("POST /game/join handler", () => {
     expect(result.cookie).toContain("HttpOnly");
     expect(result.cookie).toContain(result.body.playerId);
   });
+
+  it("12: joining with a name already in use returns 422 with name_taken", () => {
+    handleJoinGame({ gameId, playerName: "Bob" });
+    const result = handleJoinGame({ gameId, playerName: "Bob" });
+    expect(result.status).toBe(422);
+    if (result.status !== 422) return;
+    expect(result.body.error).toBe("name_taken");
+  });
+
+  it("13: name check is case-insensitive", () => {
+    handleJoinGame({ gameId, playerName: "Bob" });
+    const result = handleJoinGame({ gameId, playerName: "BOB" });
+    expect(result.status).toBe(422);
+    if (result.status !== 422) return;
+    expect(result.body.error).toBe("name_taken");
+  });
+
+  it("14: same name is allowed in a different game", () => {
+    handleJoinGame({ gameId, playerName: "Bob" });
+    const other = handleCreateGame(validGameBody);
+    if (other.status !== 201) throw new Error("Setup: second game creation failed");
+    const result = handleJoinGame({ gameId: other.body.gameId, playerName: "Bob" });
+    expect(result.status).toBe(200);
+  });
 });
