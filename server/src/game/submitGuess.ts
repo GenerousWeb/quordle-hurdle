@@ -11,6 +11,7 @@ export type BoardState = {
   targetWord: string;
   attemptCount: number;
   status: "unsolved" | "solved" | "failed";
+  guessedWords: Set<string>;
 };
 
 export type PlayerState = {
@@ -101,11 +102,15 @@ export function handleSubmitGuess(
   const boardResults: BoardResult[] = [];
   let attemptNumber = 0;
 
+  const normalizedGuess = guess.toLowerCase();
+
   for (const idx of unsolvedIndices) {
     const board = player.boards[idx];
     const result = matchGuess(guess, board.targetWord);
     const solved = result.every((r) => r === "green");
 
+    const isNewGuess = !board.guessedWords.has(normalizedGuess);
+    board.guessedWords.add(normalizedGuess);
     board.attemptCount += 1;
     attemptNumber = Math.max(attemptNumber, board.attemptCount);
 
@@ -123,7 +128,9 @@ export function handleSubmitGuess(
     // Early-finish bonus: only applies when this solve makes all boards terminal
     const allTerminalNow =
       solved && player.boards.every((b) => b.status === "solved" || b.status === "failed");
-    const scoreDelta = calculateScore(result, solved, allTerminalNow, secondsRemaining);
+    // Tile points (green/yellow) are only awarded the first time a word is guessed on a board
+    const scoringResult = isNewGuess ? result : (result.map(() => "grey" as const));
+    const scoreDelta = calculateScore(scoringResult, solved, allTerminalNow, secondsRemaining);
 
     player.score += scoreDelta;
     boardResults.push({ boardIndex: idx, result, scoreDelta, boardStatus });
